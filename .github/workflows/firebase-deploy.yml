@@ -15,15 +15,15 @@ concurrency:
 jobs:
   test:
     name: Build and test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '24'
           cache: npm
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
@@ -34,7 +34,7 @@ jobs:
         run: npm test
         env:
           FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: firebase-site
           path: public/
@@ -43,24 +43,39 @@ jobs:
   deploy:
     name: Publish website and Firestore rules
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Check deployment credential is connected
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
-            echo '::error::Add the FIREBASE_SERVICE_ACCOUNT repository secret using the steps in DEPLOY.md, then re-run this workflow.'
+            echo '::error::Deployment credential is missing. In sskim4912/permit, open Settings > Secrets and variables > Actions > Repository secrets and save FIREBASE_SERVICE_ACCOUNT (exact name, no spaces). Then re-run all jobs.'
             exit 1
           fi
-      - uses: actions/setup-node@v4
+          python3 - <<'PYTHON'
+          import json, os, sys
+          try:
+              key = json.loads(os.environ['FIREBASE_SERVICE_ACCOUNT'])
+              valid = (key.get('type') == 'service_account'
+                       and key.get('project_id') == 'permit-daesan-461e8'
+                       and bool(key.get('client_email'))
+                       and bool(key.get('private_key')))
+              if not valid:
+                  raise ValueError()
+          except (ValueError, TypeError, AttributeError):
+              print('::error::FIREBASE_SERVICE_ACCOUNT must contain the complete service-account JSON for permit-daesan-461e8. Update the GitHub secret; never paste the key into logs or chat.')
+              sys.exit(1)
+          print('Deployment credential format and target project verified.')
+          PYTHON
+      - uses: actions/setup-node@v5
         with:
           node-version: '24'
           cache: npm
       - run: npm ci
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: firebase-site
           path: public/
