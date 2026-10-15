@@ -6,12 +6,13 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function dialogs(w){w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};}
 test('administrator navigation, date filtering, safe CSV and logout privacy',async()=>{
  const dom=new JSDOM(readFileSync('public/index.html','utf8'),{url:'http://localhost',runScripts:'outside-only'}),w=dom.window,d=w.document;
- let signed=false,blob,recipient='sskim07@gsenc.com';const records=[{id:'abc123',visit_date:'2026-10-15',purpose:'회의',team:'안전팀',name:'테스트',birth:'1990-01-01',phone:'010-0000-0000',gate:'서문',plate:'=malicious',vehicle_type:'승용',vehicle_name:'캐스퍼',role:'운전자',shoes:'285',status:'현장 제출',reviewer:'',version:1,created:'2026-10-14T10:00:00Z'},{id:'def456',visit_date:'2026-10-16',purpose:'점검',team:'공무팀',name:'테스트2',status:'현장 제출',reviewer:'',created:'2026-10-14T11:00:00Z'}];
+ let updates=[];let signed=false,blob,recipient='sskim07@gsenc.com';const records=[{id:'abc123',visit_date:'2026-10-15',purpose:'회의',team:'안전팀',name:'테스트',birth:'1990-01-01',phone:'010-0000-0000',gate:'서문',plate:'=malicious',vehicle_type:'승용',vehicle_name:'캐스퍼',role:'운전자',shoes:'285',status:'현장 제출',reviewer:'',version:1,created:'2026-10-14T10:00:00Z'},{id:'def456',visit_date:'2026-10-16',purpose:'점검',team:'공무팀',name:'테스트2',status:'현장 제출',reviewer:'',created:'2026-10-14T11:00:00Z'}];
  dialogs(w);w.createPermitAPI=()=>({api:async(path,data)=>{
   if(path==='session')return {reviewer:signed};
   if(path==='login'){if(data.password!=='test-password')throw Error('비밀번호가 맞지 않습니다.');signed=true;return {};}
   if(path==='logout'){signed=false;return {};}
   if(path==='requests')return signed?structuredClone(records):records.map(({id,visit_date,purpose,team,status,reviewer,version})=>({id,visit_date,purpose,team,status,reviewer,version}));
+  if(path==='update'){assert.ok(signed);updates.push(data);return {};}
   if(path==='settings'){assert.ok(signed);if(data)recipient=data.recipient;return {recipient};}
  }});
  w.setInterval=()=>0;w.setTimeout=()=>0;w.Blob=Blob;w.URL.createObjectURL=b=>{blob=b;return 'blob:test';};w.HTMLAnchorElement.prototype.click=function(){};
@@ -23,6 +24,7 @@ test('administrator navigation, date filtering, safe CSV and logout privacy',asy
  d.querySelector('[data-day="2026-10-15"]').click();assert.match(d.querySelector('#list').textContent,/테스트/);
  assert.ok(!d.querySelector('#list').textContent.includes('테스트2'));
  await d.querySelector('#download').onclick();const csv=await blob.text();assert.match(csv,/테스트/);assert.ok(!csv.includes('테스트2'));assert.ok(csv.includes("'=malicious"));assert.match(csv,/010-0000-0000/);
+ d.querySelector('#list [data-edit]').click();assert.equal(d.querySelector('#formDialog').hidden,false);assert.equal(d.querySelector('[name="purpose"]').value,'회의');d.querySelector('#reviewer').value='현장확인자';await d.querySelector('#requestForm').onsubmit({preventDefault(){}});assert.equal(updates.length,1);assert.equal(updates[0].name,'테스트');assert.equal(updates[0].reviewer,'현장확인자');
  d.querySelector('#recipient').value='changed@example.com';await d.querySelector('#settingsForm').onsubmit({preventDefault(){}});assert.equal(recipient,'changed@example.com');
  await d.querySelector('#login').onclick();assert.equal(d.querySelector('#adminTools').hidden,true);assert.ok(!d.querySelector('#list').textContent.includes('테스트'));
  dom.window.close();
@@ -38,9 +40,9 @@ test('app supports adding draft visitor rows and limits a submission to ten visi
 });
 
 async function requestPage(){
- const dom=new JSDOM(readFileSync('public/index.html','utf8'),{url:'http://localhost',runScripts:'outside-only'}),w=dom.window,d=w.document,submitted=[];
+ const dom=new JSDOM(readFileSync('public/index.html','utf8'),{url:'http://localhost',runScripts:'outside-only'}),w=dom.window,d=w.document,submitted=[],stored=[];
  dialogs(w);w.confirm=()=>true;w.setInterval=()=>0;w.setTimeout=()=>0;
- w.createPermitAPI=()=>({api:async(path,data)=>{if(path==='session')return {reviewer:false};if(path==='requests'&&data){submitted.push(structuredClone(data));return {count:data.items.length};}return [];}});
+ w.createPermitAPI=()=>({api:async(path,data)=>{if(path==='session')return {reviewer:false};if(path==='requests'&&data){submitted.push(structuredClone(data));stored.push(...data.items.map((item,index)=>({id:'record-'+index,visit_date:item.visit_date,purpose:item.purpose,team:item.team,status:'현장 제출',reviewer:'',version:1})));return {count:data.items.length};}return stored;}});
  w.eval(readFileSync('src/app.js','utf8').replace("import {createPermitAPI} from './firebase-api.js';",''));await tick();d.querySelector('#new').click();
  const enter=(name,value)=>{const input=d.querySelector(`[name="${name}"]`);input.value=value;input.dispatchEvent(new w.Event('input',{bubbles:true}));return input;};
  return {dom,w,d,submitted,enter};
@@ -53,7 +55,7 @@ test('numeric birthday and telephone are formatted and valid submission preserve
   assert.equal(birth.value,'1990-01-23');assert.equal(phone.value,'010-0000-0000');
   assert.equal(birth.checkValidity(),true);
   await d.querySelector('#requestForm').onsubmit({preventDefault(){}});
-  assert.equal(submitted.length,1);assert.equal(submitted[0].items[0].birth,'1990-01-23');assert.equal(submitted[0].items[0].phone,'010-0000-0000');assert.equal(d.querySelector('#formDialog').open,false);
+  assert.equal(submitted.length,1);assert.equal(submitted[0].items[0].birth,'1990-01-23');assert.equal(submitted[0].items[0].phone,'010-0000-0000');assert.equal(d.querySelector('[name="name"]').value,'');assert.equal(d.querySelector('#formDialog').hidden,false);
  }finally{dom.window.close();}
 });
 test('missing required field displays an inline error above the buttons and focuses the first blank',async()=>{
@@ -87,5 +89,29 @@ test('phone accepts ten digits and hyphen editing retains a usable cursor',async
  try{
   assert.equal(enter('phone','0110000000').value,'011-000-0000');
   const birth=enter('birth','19900123');birth.focus();birth.setSelectionRange(5,5);birth.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Backspace',bubbles:true}));assert.equal(birth.selectionStart,3);assert.equal(birth.selectionEnd,5);
+ }finally{dom.window.close();}
+});
+
+test('one shared header populates multiple visitors, draft appears below and submitted list replaces it',async()=>{
+ const {dom,w,d,submitted,enter}=await requestPage();
+ try{
+  assert.equal(d.querySelector('#formDialog').tagName,'SECTION');assert.equal(d.querySelector('#formDialog').hidden,false);
+  enter('purpose','공통 회의');enter('team','공무팀');enter('name','첫방문자');enter('birth','19900123');enter('phone','01000000000');
+  d.querySelector('#add').click();const second=d.querySelectorAll('.person')[1];
+  for(const [key,value] of [['name','두번째방문자'],['birth','19800229'],['phone','01000000001']]){const input=second.querySelector(`[name="${key}"]`);input.value=value;input.dispatchEvent(new w.Event('input',{bubbles:true}));}
+  assert.equal(d.querySelectorAll('[name="purpose"]').length,1);
+  d.querySelector('#draft').click();assert.equal(d.querySelectorAll('#list [data-draft]').length,2);assert.match(d.querySelector('#list').textContent,/작성 중/);
+  enter('name','바뀐이름');d.querySelector('#list [data-draft]').click();assert.equal(d.querySelector('[name="name"]').value,'첫방문자');assert.equal(d.querySelectorAll('.person').length,2);
+  await d.querySelector('#requestForm').onsubmit({preventDefault(){}});
+  assert.equal(submitted[0].items.length,2);assert.ok(submitted[0].items.every(item=>item.purpose==='공통 회의'&&item.team==='공무팀'));
+  assert.equal(w.sessionStorage.getItem('permit-draft'),null);assert.equal(d.querySelectorAll('#list [data-draft]').length,0);assert.match(d.querySelector('#list').textContent,/현장 제출/);assert.equal(d.querySelector('[name="name"]').value,'');
+ }finally{dom.window.close();}
+});
+test('restoring a legacy draft preserves different visitor dates and purposes',async()=>{
+ const {dom,w,d}=await requestPage();
+ try{
+  const saved=[{visit_date:'2026-10-15',purpose:'회의',team:'안전팀',gate:'서문',name:'방문자1'},{visit_date:'2026-10-16',purpose:'점검',team:'공무팀',gate:'정문',name:'방문자2'}];
+  w.sessionStorage.setItem('permit-draft',JSON.stringify(saved));d.querySelector('#loadDraft').click();d.querySelector('#draft').click();
+  const restored=JSON.parse(w.sessionStorage.getItem('permit-draft'));assert.equal(restored[1].visit_date,'2026-10-16');assert.equal(restored[1].purpose,'점검');assert.equal(restored[1].gate,'정문');
  }finally{dom.window.close();}
 });
