@@ -18,21 +18,28 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           project_id: permit-daesan-461e8
-      - name: Publish preview channel only
+      - name: Create dedicated preview site when needed
         run: |
-          npx --no-install firebase hosting:channel:deploy gate-map-preview --expires 7d --config preview/firebase.json --project permit-daesan-461e8 --non-interactive --json > /tmp/preview-result.json
+          npx --no-install firebase hosting:sites:list --project permit-daesan-461e8 --json > /tmp/hosting-sites.json
           node - <<'JS'
           const fs = require('fs');
-          const data = JSON.parse(fs.readFileSync('/tmp/preview-result.json','utf8'));
-          function find(x) {
-            if (typeof x === 'string' && /^https:\/\/permit-daesan-461e8--gate-map-preview[^/]*\.web\.app/.test(x)) return x;
-            if (x && typeof x === 'object') for (const v of Object.values(x)) { const u=find(v); if(u) return u; }
+          const {execFileSync} = require('child_process');
+          const data = JSON.parse(fs.readFileSync('/tmp/hosting-sites.json','utf8'));
+          const site = 'permit-daesan-design-preview';
+          if (!Array.isArray(data.result?.sites)) throw Error('Cannot verify existing hosting sites');
+          if (!data.result.sites.some(s => s.name.split('/').pop() === site)) {
+            execFileSync('npx',['--no-install','firebase','hosting:sites:create',site,'--project','permit-daesan-461e8','--non-interactive'],{stdio:'inherit'});
           }
-          const url = find(data); if (!url) throw Error('Preview URL missing');
-          fs.writeFileSync('preview-url.txt',url+'\n');
           JS
+      - name: Publish dedicated preview site only
+        run: |
+          npx --no-install firebase deploy --only hosting --config preview/firebase.json --project permit-daesan-461e8 --non-interactive
+          curl --fail --retry 5 --retry-all-errors --retry-delay 5 --silent --show-error https://permit-daesan-design-preview.web.app/ -o /tmp/published-preview.html
+          grep -q '운영 사이트 및 실제 신청 데이터와 연결되지 않습니다' /tmp/published-preview.html
+          printf '%s\n' 'https://permit-daesan-design-preview.web.app/' > preview-url.txt
+          printf '%s\n' "$GITHUB_SHA" > preview-published-commit.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add preview-url.txt
-          git diff --cached --quiet || git commit -m 'Record isolated preview URL [skip ci]'
+          git add preview-url.txt preview-published-commit.txt
+          git diff --cached --quiet || git commit -m 'Record permanent preview deployment [skip ci]'
           git push origin HEAD:gate-map-preview
