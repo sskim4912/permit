@@ -23,8 +23,8 @@ button.danger:hover:not(:disabled){background:#fff3f1}
 .gate-map .external-arrow{color:#7191ad;font-size:15px}
 .gate-map:hover{background:#e1efff;border-color:#aecbe7;box-shadow:0 2px 6px #214b3108}
 #requestForm>.section-title{padding-bottom:18px;border-bottom:1px solid #e7eeea;flex-wrap:wrap;gap:16px;margin-bottom:12px}
-.site-header .admin-access{min-height:44px;min-width:184px;padding:10px 16px;border:1px solid #cedff1;border-radius:8px;font-size:14px;color:#285a82;background:#edf5ff}
-.site-header .admin-access:hover{background:#e1efff;border-color:#aecbe7}
+.site-header .admin-access{min-height:44px;min-width:184px;padding:10px 16px;border:1px solid #8cb8e6;border-radius:8px;font-size:14px;color:#184f82;background:#c6dfff}
+.site-header .admin-access:hover{background:#b4d3fa;border-color:#74a7dc}
 .form-actions .primary{min-width:184px}
 .bulk-toolbar>div>button{min-width:144px}
 .filters #refresh{width:44px;height:44px;padding:0;font-size:21px}
