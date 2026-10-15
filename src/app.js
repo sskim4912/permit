@@ -41,7 +41,8 @@ function attachFormatting(box){
     input.addEventListener('keydown',event=>{const start=input.selectionStart;if(event.key==='Backspace'&&start===input.selectionEnd&&start>0&&input.value[start-1]==='-')input.setSelectionRange(Math.max(0,start-2),start);});
   }
 }
-function collectPeople(){const common=Object.fromEntries([...$('commonFields').querySelectorAll('[name]')].map(input=>[input.name,input.value.trim()]));return [...$('people').querySelectorAll('.person')].map(box=>({...common,...Object.fromEntries([...box.querySelectorAll('[name]')].map(input=>[input.name,input.value.trim()]))}));}
+function collectPeople(){return [...$('people').querySelectorAll('.person')].map(box=>Object.fromEntries([...box.querySelectorAll('[name]')].map(input=>[input.name,input.value.trim()])));}
+
 function savedDraft(){const value=JSON.parse(sessionStorage.getItem('permit-draft')||'null');return Array.isArray(value)?value:[];}
 function draftRows(){try{return savedDraft().map((item,index)=>({...item,id:'draft-'+index,localDraft:true,status:'작성 중',reviewer:'',visit_date:item.visit_date||'',purpose:item.purpose||'',team:item.team||''}));}catch(e){return [];}}
 
@@ -50,13 +51,12 @@ function clearErrors(){for(const input of $('requestForm').querySelectorAll('[ar
 function fieldError(input,message){$('formError').textContent=message;input.setAttribute('aria-invalid','true');input.focus();input.scrollIntoView?.({block:'nearest',behavior:'smooth'});return false;}
 function validateForm(){
   clearErrors();
-  for(const [key,label] of definitions.filter(([key])=>commonKeys.includes(key))){const input=$('commonFields').querySelector(`[name="${key}"]`);if(input.required&&!input.value.trim())return fieldError(input,label.replace(' *','')+'을(를) 입력해 주세요.');}
   const boxes=[...$('people').querySelectorAll('.person')];
   for(let index=0;index<boxes.length;index++){
     const box=boxes[index],prefix=`방문자 ${index+1}: `;
-    for(const [key,label] of definitions.filter(([key])=>!commonKeys.includes(key))){const input=box.querySelector(`[name="${key}"]`);if(input.required&&!input.value.trim())return fieldError(input,prefix+label.replace(' *','')+'을(를) 입력해 주세요.');}
+    for(const [key,label] of definitions){const input=box.querySelector(`[name="${key}"]`);if(input.required&&!input.value.trim())return fieldError(input,prefix+label.replace(' *','')+'을(를) 입력해 주세요.');}
     const birth=box.querySelector('[name="birth"]');birth.value=formatBirth(birth.value);
-    const visit=box.querySelector('[name="visit_date"]')||$('commonFields').querySelector('[name="visit_date"]');
+    const visit=box.querySelector('[name="visit_date"]');
     for(const [input,label] of [[visit,'방문일자'],[birth,'생년월일']]){
       const value=input.value,date=new Date(value);
       if(!/^\d{4}-\d{2}-\d{2}$/.test(value)||Number.isNaN(date.getTime())||date.toISOString().slice(0,10)!==value)return fieldError(input,prefix+label+'을(를) 실제 날짜로 입력해 주세요. 예: 1990-01-23');
@@ -73,22 +73,19 @@ function inputMarkup([key,label,type,hint],item={}){
   const control=Array.isArray(type)?`<select name="${key}" aria-label="${label.replace(' *','')}">${type.map(v=>`<option value="${v}" ${value===v?'selected':''}>${v}${key==='shoes'&&v!=='필요없음'?'mm':''}</option>`).join('')}</select>`:`<input name="${key}" aria-label="${label.replace(' *','')}" type="${type}" ${label.includes('*')?'required':''} maxlength="200" placeholder="${hint||''}" value="${escapeHTML(value)}">`;
   return `<label class="field-${key}"><span>${label}</span>${control}</label>`;
 }
-function setCommon(item={}){$('commonFields').innerHTML=definitions.filter(([key])=>commonKeys.includes(key)).map(def=>inputMarkup(def,item)).join('');}
 function restoreDraft(){
   try{const saved=savedDraft();if(!saved.length){$('draftMessage').textContent='이 탭에 임시 저장된 신청이 없습니다.';return;}
-    // Old drafts could use different shared fields per visitor; preserve them for editing.
-    openForm();setCommon(saved[0]);$('people').innerHTML='';saved.forEach(item=>addPerson(item,true));clearErrors();$('draftMessage').textContent=`임시 저장된 방문자 ${saved.length}명을 불러왔습니다.`;
+    openForm();$('people').innerHTML='';saved.forEach(item=>addPerson(item));clearErrors();$('draftMessage').textContent=`임시 저장된 방문자 ${saved.length}명을 불러왔습니다.`;
     $('formDialog').scrollIntoView?.({behavior:'smooth',block:'start'});
   }catch(e){$('formError').textContent='임시 저장을 불러오지 못했습니다. 브라우저 저장소 설정을 확인해 주세요.';}
 }
-function addPerson(item={},preserveCommon=false){
+function addPerson(item={}){
   if($('people').children.length>=10){toast('한 번에 10명까지 제출할 수 있습니다.');return;}
   const box=document.createElement('section');box.className='person';
-  box.innerHTML=definitions.filter(([key])=>!commonKeys.includes(key)).map(def=>inputMarkup(def,item)).join('')+'<button type="button" class="remove" aria-label="방문자 행 삭제">×</button>';
-  if(preserveCommon){const differences=commonKeys.filter(key=>item[key]!==undefined&&item[key]!==$('commonFields').querySelector(`[name="${key}"]`).value);if(differences.length){const extra=document.createElement('div');extra.className='legacy-common';extra.innerHTML='<small>이전 저장본의 개별 방문 정보</small>'+definitions.filter(([key])=>differences.includes(key)).map(def=>inputMarkup(def,item)).join('');box.append(extra);}}
+  box.innerHTML='<div class="person-visit">'+definitions.filter(([key])=>commonKeys.includes(key)).map(def=>inputMarkup(def,item)).join('')+'</div>'+definitions.filter(([key])=>!commonKeys.includes(key)).map(def=>inputMarkup(def,item)).join('')+'<button type="button" class="remove" aria-label="방문자 행 삭제">×</button>';
   const pair=document.createElement('div');pair.className='vehicle-pair';const vehicleType=box.querySelector('.field-vehicle_type');vehicleType.before(pair);pair.append(vehicleType,box.querySelector('.field-vehicle_name'));box.querySelector('.remove').onclick=()=>{if($('people').children.length>1)box.remove();else toast('방문자 한 명 이상이 필요합니다.');};$('people').append(box);attachFormatting(box);
 }
-function openForm(item=null){editing=item;setCommon(item||{});$('people').innerHTML='';addPerson(item||{});$('add').hidden=!!item;$('draft').hidden=!!item;$('loadDraft').hidden=!!item;$('reviewFields').hidden=!item;$('editingLabel').hidden=!item;$('reviewer').required=!!item;$('reviewer').value=item?.reviewer||'';$('status').value=item?.status||'현장 제출';$('formTitle').textContent=item?'신청 확인 및 수정':'출입 신청 작성';$('submit').textContent=item?'변경사항 저장':'현장제출 →';clearErrors();$('formDialog').hidden=false;}
+function openForm(item=null){editing=item;$('people').innerHTML='';addPerson(item||{});$('add').hidden=!!item;$('draft').hidden=!!item;$('loadDraft').hidden=!!item;$('reviewFields').hidden=!item;$('editingLabel').hidden=!item;$('reviewer').required=!!item;$('reviewer').value=item?.reviewer||'';$('status').value=item?.status||'현장 제출';$('formTitle').textContent=item?'신청 확인 및 수정':'출입 신청 작성';$('submit').textContent=item?'변경사항 저장':'현장제출 →';clearErrors();$('formDialog').hidden=false;}
 function formItem(){return collectPeople()[0];}
 $('new').onclick=()=>{openForm();try{const saved=JSON.parse(sessionStorage.getItem('permit-draft')||'null');if(saved?.length&&confirm('이 탭에 임시 저장한 신청을 불러올까요?')){restoreDraft();}}catch(e){toast('임시 저장을 불러올 수 없습니다. 새로 작성해 주세요.');}};$('add').onclick=()=>addPerson();$('refresh').onclick=refresh;
 document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$(b.dataset.close).close());

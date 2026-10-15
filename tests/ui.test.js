@@ -92,18 +92,18 @@ test('phone accepts ten digits and hyphen editing retains a usable cursor',async
  }finally{dom.window.close();}
 });
 
-test('one shared header populates multiple visitors, draft appears below and submitted list replaces it',async()=>{
+test('different visit details persist per visitor through draft restore and submission',async()=>{
  const {dom,w,d,submitted,enter}=await requestPage();
  try{
   assert.equal(d.querySelector('#formDialog').tagName,'SECTION');assert.equal(d.querySelector('#formDialog').hidden,false);
   enter('purpose','공통 회의');enter('team','공무팀');enter('name','첫방문자');enter('birth','19900123');enter('phone','01000000000');
   d.querySelector('#add').click();const second=d.querySelectorAll('.person')[1];
-  for(const [key,value] of [['name','두번째방문자'],['birth','19800229'],['phone','01000000001']]){const input=second.querySelector(`[name="${key}"]`);input.value=value;input.dispatchEvent(new w.Event('input',{bubbles:true}));}
-  assert.equal(d.querySelectorAll('[name="purpose"]').length,1);
+  for(const [key,value] of [['name','두번째방문자'],['birth','19800229'],['phone','01000000001'],['visit_date','2026-10-16'],['purpose','개별 점검'],['team','안전팀'],['gate','정문']]){const input=second.querySelector(`[name="${key}"]`);input.value=value;input.dispatchEvent(new w.Event('input',{bubbles:true}));}
+  assert.equal(d.querySelectorAll('[name="purpose"]').length,2);
   d.querySelector('#draft').click();assert.equal(d.querySelectorAll('#list [data-draft]').length,2);assert.match(d.querySelector('#list').textContent,/작성 중/);
   enter('name','바뀐이름');d.querySelector('#list [data-draft]').click();assert.equal(d.querySelector('[name="name"]').value,'첫방문자');assert.equal(d.querySelectorAll('.person').length,2);
   await d.querySelector('#requestForm').onsubmit({preventDefault(){}});
-  assert.equal(submitted[0].items.length,2);assert.ok(submitted[0].items.every(item=>item.purpose==='공통 회의'&&item.team==='공무팀'));
+  assert.equal(submitted[0].items.length,2);assert.equal(submitted[0].items[0].purpose,'공통 회의');assert.equal(submitted[0].items[0].team,'공무팀');assert.equal(submitted[0].items[1].purpose,'개별 점검');assert.equal(submitted[0].items[1].team,'안전팀');assert.equal(submitted[0].items[1].visit_date,'2026-10-16');assert.equal(submitted[0].items[1].gate,'정문');
   assert.equal(w.sessionStorage.getItem('permit-draft'),null);assert.equal(d.querySelectorAll('#list [data-draft]').length,0);d.querySelector('[data-status=""]').click();assert.match(d.querySelector('#list').textContent,/현장 제출/);assert.equal(d.querySelector('[name="name"]').value,'');
  }finally{dom.window.close();}
 });
@@ -125,5 +125,13 @@ test('vehicle type is a two-choice selector and draft status persists while edit
   d.querySelector('#draft').click();assert.match(d.querySelector('#draftStatus').textContent,/이 탭에 임시 저장된 신청이 있습니다/);assert.match(d.querySelector('#draftStatus').textContent,/1명/);assert.equal(d.querySelector('.tab.selected').dataset.status,'작성 중');assert.equal(d.querySelectorAll('#list [data-draft]').length,1);assert.equal(d.querySelector('#dateFilter').value,'');assert.equal(d.querySelector('#search').value,'');
   enter('name','수정 중');assert.match(d.querySelector('#draftStatus').textContent,/신청이 있습니다/);assert.equal(JSON.parse(w.sessionStorage.getItem('permit-draft'))[0].vehicle_type,'승합');
   d.querySelector('#list [data-draft]').click();assert.equal(d.querySelector('[name="vehicle_type"]').value,'승합');assert.equal(d.querySelector('[name="name"]').value,'가상방문자');
+ }finally{dom.window.close();}
+});
+
+test('missing visit details on a second visitor focuses that visitor without submitting',async()=>{
+ const {dom,w,d,submitted,enter}=await requestPage();
+ try{
+  enter('purpose','첫방문');enter('team','공무팀');enter('name','방문자1');enter('birth','19900123');enter('phone','01000000000');d.querySelector('#add').click();
+  await d.querySelector('#requestForm').onsubmit({preventDefault(){}});assert.match(d.querySelector('#formError').textContent,/방문자 2/);assert.equal(d.activeElement.name,'purpose');assert.equal(d.activeElement.closest('.person'),d.querySelectorAll('.person')[1]);assert.equal(submitted.length,0);
  }finally{dom.window.close();}
 });
