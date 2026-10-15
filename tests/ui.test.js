@@ -36,3 +36,56 @@ test('app supports adding draft visitor rows and limits a submission to ten visi
  d.querySelector('[name="name"]').value='임시 방문자';d.querySelector('#draft').click();assert.equal(JSON.parse(w.sessionStorage.getItem('permit-draft'))[0].name,'임시 방문자');
  dom.window.close();
 });
+
+async function requestPage(){
+ const dom=new JSDOM(readFileSync('public/index.html','utf8'),{url:'http://localhost',runScripts:'outside-only'}),w=dom.window,d=w.document,submitted=[];
+ dialogs(w);w.confirm=()=>true;w.setInterval=()=>0;w.setTimeout=()=>0;
+ w.createPermitAPI=()=>({api:async(path,data)=>{if(path==='session')return {reviewer:false};if(path==='requests'&&data){submitted.push(structuredClone(data));return {count:data.items.length};}return [];}});
+ w.eval(readFileSync('src/app.js','utf8').replace("import {createPermitAPI} from './firebase-api.js';",''));await tick();d.querySelector('#new').click();
+ const enter=(name,value)=>{const input=d.querySelector(`[name="${name}"]`);input.value=value;input.dispatchEvent(new w.Event('input',{bubbles:true}));return input;};
+ return {dom,w,d,submitted,enter};
+}
+test('numeric birthday and telephone are formatted and valid submission preserves their values',async()=>{
+ const {dom,w,d,submitted,enter}=await requestPage();
+ try{
+  enter('purpose','기능 테스트');enter('team','테스트팀');enter('name','가상방문자');
+  const birth=enter('birth','19900123'),phone=enter('phone','01000000000');
+  assert.equal(birth.value,'1990-01-23');assert.equal(phone.value,'010-0000-0000');
+  assert.equal(birth.checkValidity(),true);
+  await d.querySelector('#requestForm').onsubmit({preventDefault(){}});
+  assert.equal(submitted.length,1);assert.equal(submitted[0].items[0].birth,'1990-01-23');assert.equal(submitted[0].items[0].phone,'010-0000-0000');assert.equal(d.querySelector('#formDialog').open,false);
+ }finally{dom.window.close();}
+});
+test('missing required field displays an inline error above the buttons and focuses the first blank',async()=>{
+ const {dom,d,submitted,enter}=await requestPage();
+ try{
+  await d.querySelector('#requestForm').onsubmit({preventDefault(){}});
+  assert.match(d.querySelector('#formError').textContent,/방문목적/);assert.equal(d.activeElement.name,'purpose');assert.equal(d.activeElement.getAttribute('aria-invalid'),'true');assert.equal(submitted.length,0);
+  assert.ok(d.querySelector('#formError').compareDocumentPosition(d.querySelector('.dialog-actions'))&4);
+  enter('purpose','테스트');await d.querySelector('#requestForm').onsubmit({preventDefault(){}});assert.equal(d.activeElement.name,'team');
+ }finally{dom.window.close();}
+});
+test('impossible date, future birthday and incomplete phone are rejected with focus',async()=>{
+ const {dom,d,submitted,enter}=await requestPage();
+ try{
+  enter('purpose','테스트');enter('team','테스트팀');enter('name','가상방문자');enter('birth','19900230');enter('phone','01000000000');
+  await d.querySelector('#requestForm').onsubmit({preventDefault(){}});assert.equal(d.activeElement.name,'birth');assert.match(d.querySelector('#formError').textContent,/실제 날짜/);
+  enter('birth','29990101');await d.querySelector('#requestForm').onsubmit({preventDefault(){}});assert.match(d.querySelector('#formError').textContent,/오늘 이후/);
+  enter('birth','20000229');enter('phone','01012');await d.querySelector('#requestForm').onsubmit({preventDefault(){}});assert.equal(d.activeElement.name,'phone');assert.match(d.querySelector('#formError').textContent,/휴대전화번호/);assert.equal(submitted.length,0);
+ }finally{dom.window.close();}
+});
+test('partial draft visibly saves, restores changes and reports storage failure inline',async()=>{
+ const {dom,w,d,enter}=await requestPage();
+ try{
+  enter('name','임시 방문자');enter('birth','19780203');enter('phone','01000000000');d.querySelector('#draft').click();assert.match(d.querySelector('#draftMessage').textContent,/임시 저장 완료/);
+  assert.equal(d.querySelector('#formError').textContent,'');enter('name','바뀐 이름');d.querySelector('#loadDraft').click();assert.equal(d.querySelector('[name="name"]').value,'임시 방문자');assert.equal(d.querySelector('[name="birth"]').value,'1978-02-03');assert.equal(d.querySelector('[name="phone"]').value,'010-0000-0000');
+  Object.defineProperty(w,'sessionStorage',{get(){throw Error('storage blocked');}});d.querySelector('#draft').click();assert.match(d.querySelector('#formError').textContent,/임시 저장에 실패/);
+ }finally{dom.window.close();}
+});
+test('phone accepts ten digits and hyphen editing retains a usable cursor',async()=>{
+ const {dom,w,d,enter}=await requestPage();
+ try{
+  assert.equal(enter('phone','0110000000').value,'011-000-0000');
+  const birth=enter('birth','19900123');birth.focus();birth.setSelectionRange(5,5);birth.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Backspace',bubbles:true}));assert.equal(birth.selectionStart,3);assert.equal(birth.selectionEnd,5);
+ }finally{dom.window.close();}
+});

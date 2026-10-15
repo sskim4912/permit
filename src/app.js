@@ -22,22 +22,70 @@ $('adminTools').hidden=!(adminView&&admin);$('adminMenu').classList.toggle('acti
 $('login').textContent=admin?'현장 담당자 · 로그아웃':'현장 담당자 로그인 ↗';$('privacy').textContent=admin?'현장 담당자 모드 · 신청 내용을 확인하고 진행 상태를 변경하세요.':'개인정보는 현장 담당자 로그인 후 확인할 수 있습니다.';
 }
 const definitions=[['visit_date','방문일자 *','date'],['purpose','방문목적 *','text','회의 참석'],['team','요청팀 *','text','안전팀 / 공무팀 / 관리팀'],['gate','출입위치 *',['서문','정문']],['name','이름 *','text','방문자 이름'],['birth','생년월일 *','text',today],['phone','휴대전화번호 *','tel','010-0000-0000'],['plate','차량번호','text','123가4567'],['vehicle_type','차종','text','승용 / 화물'],['vehicle_name','차명','text','캐스퍼'],['role','탑승 구분 *',['운전자','동승자','도보']],['shoes','안전화 (mm) *',['필요없음',...Array.from({length:15},(_,i)=>String(230+i*5))]]];
-function addPerson(item={}) {if($('people').children.length>=10){toast('한 번에 10명까지 제출할 수 있습니다.');return;}const box=document.createElement('section');box.className='person';box.innerHTML=`<div class="person-head"><b>방문자 정보</b><button type="button" class="remove">행 삭제</button></div><div class="grid">${definitions.map(([key,label,type,hint])=>`<label>${label}${Array.isArray(type)?`<select name="${key}">${type.map(v=>`<option value="${v}" ${item[key]===v?'selected':''}>${v}${key==='shoes'&&v!=='필요없음'?'mm':''}</option>`).join('')}</select>`:`<input name="${key}" type="${type}" ${label.includes('*')?'required':''} ${key==='birth'?'pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}" title="YYYY-MM-DD 형식으로 입력하세요"':''} maxlength="200" placeholder="${hint||''}" value="${escapeHTML(item[key]||(key==='visit_date'?today:''))}">`}</label>`).join('')}</div>`;box.querySelector('.remove').onclick=()=>{if($('people').children.length>1)box.remove();else toast('방문자 한 명 이상이 필요합니다.');};$('people').append(box);}
-function openForm(item=null){editing=item;$('people').innerHTML='';addPerson(item||{});$('add').hidden=!!item;$('draft').hidden=!!item;$('reviewFields').hidden=!item;$('reviewer').required=!!item;$('reviewer').value=item?.reviewer||'';$('status').value=item?.status||'현장 제출';$('formTitle').textContent=item?'신청 확인 및 수정':'출입 신청 작성';$('submit').textContent=item?'변경사항 저장':'현장에 제출하기 →';$('formError').textContent='';$('formDialog').showModal();}
+function formatBirth(value){const digits=value.replace(/\D/g,'').slice(0,8);return [digits.slice(0,4),digits.slice(4,6),digits.slice(6,8)].filter(Boolean).join('-');}
+function formatPhone(value){const digits=value.replace(/\D/g,'').slice(0,11);if(digits.length<=3)return digits;if(digits.length<=7)return digits.slice(0,3)+'-'+digits.slice(3);const middle=digits.length===11?7:6;return digits.slice(0,3)+'-'+digits.slice(3,middle)+'-'+digits.slice(middle);}
+function formatInput(input){
+  const format=input.name==='birth'?formatBirth:formatPhone;
+  const position=input.selectionStart??input.value.length;
+  const digitsBefore=input.value.slice(0,position).replace(/\D/g,'').length;
+  const value=format(input.value);input.value=value;
+  let cursor=0,count=0;while(cursor<value.length&&count<digitsBefore){if(/\d/.test(value[cursor]))count++;cursor++;}
+  if(value[cursor]==='-')cursor++;input.setSelectionRange(cursor,cursor);
+}
+function attachFormatting(box){
+  for(const input of box.querySelectorAll('[name="birth"],[name="phone"]')){
+    input.value=(input.name==='birth'?formatBirth:formatPhone)(input.value);
+    input.inputMode='numeric';input.maxLength=input.name==='birth'?10:13;
+    input.addEventListener('input',()=>formatInput(input));
+    input.addEventListener('keydown',event=>{const start=input.selectionStart;if(event.key==='Backspace'&&start===input.selectionEnd&&start>0&&input.value[start-1]==='-')input.setSelectionRange(Math.max(0,start-2),start);});
+  }
+}
+function collectPeople(){return [...$('people').querySelectorAll('.person')].map(box=>Object.fromEntries([...box.querySelectorAll('[name]')].map(input=>[input.name,input.value.trim()])));}
+function clearErrors(){for(const input of $('requestForm').querySelectorAll('[aria-invalid]'))input.removeAttribute('aria-invalid');$('formError').textContent='';$('draftMessage').textContent='';}
+function fieldError(input,message){$('formError').textContent=message;input.setAttribute('aria-invalid','true');input.focus();input.scrollIntoView?.({block:'nearest',behavior:'smooth'});return false;}
+function validateForm(){
+  clearErrors();
+  const boxes=[...$('people').querySelectorAll('.person')];
+  for(let index=0;index<boxes.length;index++){
+    const box=boxes[index],prefix=`방문자 ${index+1}: `;
+    for(const [key,label] of definitions){const input=box.querySelector(`[name="${key}"]`);if(input.required&&!input.value.trim())return fieldError(input,prefix+label.replace(' *','')+'을(를) 입력해 주세요.');}
+    const birth=box.querySelector('[name="birth"]');birth.value=formatBirth(birth.value);
+    const visit=box.querySelector('[name="visit_date"]');
+    for(const [input,label] of [[visit,'방문일자'],[birth,'생년월일']]){
+      const value=input.value,date=new Date(value);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(value)||Number.isNaN(date.getTime())||date.toISOString().slice(0,10)!==value)return fieldError(input,prefix+label+'을(를) 실제 날짜로 입력해 주세요. 예: 1990-01-23');
+    }
+    if(birth.value>today)return fieldError(birth,prefix+'생년월일은 오늘 이후일 수 없습니다.');
+    const phone=box.querySelector('[name="phone"]');phone.value=formatPhone(phone.value);
+    if(!/^01[016789]-[0-9]{3,4}-[0-9]{4}$/.test(phone.value))return fieldError(phone,prefix+'휴대전화번호를 확인해 주세요. 예: 010-1234-5678');
+  }
+  if(editing&&!$('reviewer').value.trim())return fieldError($('reviewer'),'현장 확인자 이름을 입력해 주세요.');
+  return true;
+}
+function restoreDraft(){
+  try{const saved=JSON.parse(sessionStorage.getItem('permit-draft')||'null');if(!Array.isArray(saved)||!saved.length){$('draftMessage').textContent='이 탭에 임시 저장된 신청이 없습니다.';return;}
+    $('people').innerHTML='';saved.forEach(addPerson);clearErrors();$('draftMessage').textContent=`임시 저장된 방문자 ${saved.length}명을 불러왔습니다.`;
+  }catch(e){$('formError').textContent='임시 저장을 불러오지 못했습니다. 브라우저 저장소 설정을 확인해 주세요.';}
+}
+function addPerson(item={}) {if($('people').children.length>=10){toast('한 번에 10명까지 제출할 수 있습니다.');return;}const box=document.createElement('section');box.className='person';box.innerHTML=`<div class="person-head"><b>방문자 정보</b><button type="button" class="remove">행 삭제</button></div><div class="grid">${definitions.map(([key,label,type,hint])=>`<label>${label}${Array.isArray(type)?`<select name="${key}">${type.map(v=>`<option value="${v}" ${item[key]===v?'selected':''}>${v}${key==='shoes'&&v!=='필요없음'?'mm':''}</option>`).join('')}</select>`:`<input name="${key}" type="${type}" ${label.includes('*')?'required':''} ${key==='birth'?'pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}" title="YYYY-MM-DD 형식으로 입력하세요"':''} maxlength="200" placeholder="${hint||''}" value="${escapeHTML(item[key]||(key==='visit_date'?today:''))}">`}</label>`).join('')}</div>`;box.querySelector('.remove').onclick=()=>{if($('people').children.length>1)box.remove();else toast('방문자 한 명 이상이 필요합니다.');};$('people').append(box);attachFormatting(box);}
+function openForm(item=null){editing=item;$('people').innerHTML='';addPerson(item||{});$('add').hidden=!!item;$('draft').hidden=!!item;$('loadDraft').hidden=!!item;$('reviewFields').hidden=!item;$('reviewer').required=!!item;$('reviewer').value=item?.reviewer||'';$('status').value=item?.status||'현장 제출';$('formTitle').textContent=item?'신청 확인 및 수정':'출입 신청 작성';$('submit').textContent=item?'변경사항 저장':'현장에 제출하기 →';clearErrors();$('formDialog').showModal();}
 function formItem(){return Object.fromEntries(new FormData($('requestForm')).entries());}
-$('new').onclick=()=>{openForm();try{const saved=JSON.parse(sessionStorage.getItem('permit-draft')||'null');if(saved?.length&&confirm('이 탭에 임시 저장한 신청을 불러올까요?')){$('people').innerHTML='';saved.forEach(addPerson);}}catch(e){toast('임시 저장을 불러올 수 없습니다. 새로 작성해 주세요.');}};$('add').onclick=()=>addPerson();$('refresh').onclick=refresh;
+$('new').onclick=()=>{openForm();try{const saved=JSON.parse(sessionStorage.getItem('permit-draft')||'null');if(saved?.length&&confirm('이 탭에 임시 저장한 신청을 불러올까요?')){restoreDraft();}}catch(e){toast('임시 저장을 불러올 수 없습니다. 새로 작성해 주세요.');}};$('add').onclick=()=>addPerson();$('refresh').onclick=refresh;
 document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$(b.dataset.close).close());
 $('tabs').onclick=e=>{if(!e.target.matches('[data-status]'))return;filter=e.target.dataset.status;document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('selected',b===e.target));render();};
 $('search').oninput=render;$('dateFilter').onchange=render;
 $('list').onclick=e=>{const button=e.target.closest('[data-edit]');if(button)openForm(rows.find(r=>r.id===button.dataset.edit));};
 $('login').onclick=async()=>{if(admin){await api('logout',{});admin=false;rows=[];adminView=false;$('formDialog').close();render();await refresh();toast('로그아웃했습니다.');}else{$('password').value='';$('loginError').textContent='';$('loginDialog').showModal();}};
 $('loginForm').onsubmit=async e=>{e.preventDefault();try{await api('login',{password:$('password').value});admin=true;$('password').value='';$('loginDialog').close();if(pendingAdmin){adminView=true;pendingAdmin=false;await loadSettings();}await refresh();toast('로그인했습니다.');}catch(err){$('loginError').textContent=err.message;}};
-$('requestForm').onsubmit=async e=>{e.preventDefault();$('submit').disabled=true;try{if(editing){await api('update',{...formItem(),id:editing.id,version:editing.version,reviewer:$('reviewer').value,status:$('status').value});}else{const items=[...document.querySelectorAll('.person')].map(box=>Object.fromEntries([...box.querySelectorAll('[name]')].map(input=>[input.name,input.value])));await api('requests',{items});sessionStorage.removeItem('permit-draft');} $('formDialog').close();toast(editing?'변경사항을 저장했습니다.':'현장 제출이 완료되었습니다.');await refresh();}catch(err){$('formError').textContent=err.message;}finally{$('submit').disabled=false;}};
+$('requestForm').onsubmit=async e=>{e.preventDefault();if(!validateForm())return;$('submit').disabled=true;try{if(editing){await api('update',{...formItem(),id:editing.id,version:editing.version,reviewer:$('reviewer').value,status:$('status').value});}else{const items=collectPeople();await api('requests',{items});sessionStorage.removeItem('permit-draft');} $('formDialog').close();toast(editing?'변경사항을 저장했습니다.':'현장 제출이 완료되었습니다.');await refresh();}catch(err){$('formError').textContent=err.message;}finally{$('submit').disabled=false;}};
 $('delete').onclick=async()=>{if(!confirm('이 신청을 삭제할까요? 삭제 후 복구할 수 없습니다.'))return;try{await api('update',{id:editing.id,version:editing.version,action:'delete',reviewer:$('reviewer').value});$('formDialog').close();await refresh();toast('삭제했습니다.');}catch(err){$('formError').textContent=err.message;}};
 $('email').onclick=async()=>{try{recipient=(await api('settings')).recipient;}catch(e){toast(e.message);return;}if(!recipient){toast('관리자 화면에서 수신 이메일을 먼저 저장해 주세요.');return;}const item=formItem();const body='출입 승인 요청드립니다.\n\n'+definitions.map(([key,label])=>label.replace(' *','')+': '+item[key]).join('\n')+'\n현장 확인자: '+$('reviewer').value;location.href='mailto:'+encodeURIComponent(recipient)+'?subject='+encodeURIComponent('[출입 승인 요청] '+item.visit_date+' '+item.name)+'&body='+encodeURIComponent(body);toast('메일 앱에서 수신자를 확인하고 전송해 주세요.');};
 (async()=>{try{admin=(await api('session')).reviewer;await refresh();}catch(e){toast(e.message);}})();setInterval(refresh,30000);
 
-$('draft').onclick=()=>{try{const items=[...document.querySelectorAll('.person')].map(box=>Object.fromEntries([...box.querySelectorAll('[name]')].map(input=>[input.name,input.value])));sessionStorage.setItem('permit-draft',JSON.stringify(items));toast('이 탭에 임시 저장했습니다. 탭을 닫으면 삭제되며 현장에는 아직 제출되지 않습니다.');}catch(e){toast('브라우저 저장소를 사용할 수 없습니다.');}};
+$('draft').onclick=()=>{clearErrors();try{const items=collectPeople();sessionStorage.setItem('permit-draft',JSON.stringify(items));$('draftMessage').textContent=`방문자 ${items.length}명 임시 저장 완료. 빈칸이 있어도 저장됩니다. 이 탭에서 다시 불러올 수 있으며, 현장에는 아직 제출되지 않았습니다.`;$('draft').textContent='임시 저장 완료 ✓';setTimeout(()=>{$('draft').textContent='임시 저장';},2500);}catch(e){$('formError').textContent='임시 저장에 실패했습니다. 브라우저에서 사이트 저장소를 허용해 주세요.';}};
+$('loadDraft').onclick=()=>{if(confirm('현재 입력 내용을 임시 저장본으로 바꿀까요?'))restoreDraft();};
+$('people').addEventListener('input',event=>{event.target.removeAttribute('aria-invalid');$('formError').textContent='';$('draftMessage').textContent='';$('draft').textContent='임시 저장';});
+
 
 async function loadSettings(){try{recipient=(await api('settings')).recipient;$('recipient').value=recipient;}catch(e){toast(e.message);}}
 $('adminMenu').onclick=async()=>{if(!admin){pendingAdmin=true;$('password').value='';$('loginError').textContent='';$('loginDialog').showModal();return;}adminView=true;await loadSettings();render();};
