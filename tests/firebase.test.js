@@ -60,3 +60,33 @@ test('rules reject non-admin access, forged public summaries and invalid submiss
  await assertSucceeds(getDoc(doc(adminDb,'requests','valid-public')));
  await assertFails(deleteDoc(doc(adminDb,'requests','valid-public'))); // summary must be deleted atomically
 });
+
+test('bulk delivery, approval and deletion enforce admin rights, preserve data and reject partial conflicts',async()=>{
+ const api=service.api;
+ await api('logout',{});
+ await assert.rejects(()=>api('bulk',{action:'approve',items:[{id:'missing',version:1}],reviewer:'담당자'}),/관리자/);
+ await api('requests',{items:Array.from({length:10},(_,i)=>({...item,name:'일괄검증'+i,team:i%2?'안전팀':'공무팀',visit_date:i%2?'2026-10-16':'2026-10-15'}))});
+ await api('login',{password:'test-only-password'});
+ let targets=(await api('requests')).filter(row=>row.name.startsWith('일괄검증'));
+ assert.equal(targets.length,10);assert.ok(targets.every(row=>row.status==='승인 대기'));
+ await assert.rejects(()=>api('bulk',{action:'approve',items:targets.map(({id,version},i)=>({id,version:i===9?999:version})),reviewer:'담당자'}),/변경/);
+ assert.ok((await api('requests')).filter(row=>row.name.startsWith('일괄검증')).every(row=>row.status==='승인 대기'&&row.version===1));
+ await api('bulk',{action:'delivered',items:targets.map(({id,version})=>({id,version})),reviewer:'메일담당자'});
+ targets=(await api('requests')).filter(row=>row.name.startsWith('일괄검증'));assert.ok(targets.every(row=>row.delivery_at&&row.version===2&&row.status==='승인 대기'));
+ const adminDb=env.authenticatedContext(ADMIN_UID).firestore();
+ const protectedRef=doc(adminDb,'requests',targets[0].id),stored=(await getDoc(protectedRef)).data();
+ const {delivery_at,...withoutDelivery}=stored;
+ const removal=writeBatch(adminDb),dropped={...withoutDelivery,version:stored.version+1};removal.set(protectedRef,dropped);removal.set(doc(adminDb,'publicRequests',targets[0].id),pub(dropped));await assertFails(removal.commit());
+ const outsider=env.authenticatedContext('other-user').firestore();const unauthorized=writeBatch(outsider),forgedApproval={...stored,status:'승인 완료',version:stored.version+1};unauthorized.set(doc(outsider,'requests',targets[0].id),forgedApproval);unauthorized.set(doc(outsider,'publicRequests',targets[0].id),pub(forgedApproval));await assertFails(unauthorized.commit());
+ const first=targets[0],delivery=first.delivery_at;
+ await api('update',{...first,purpose:'수정된 목적',reviewer:'수정담당자'});
+ targets=(await api('requests')).filter(row=>row.name.startsWith('일괄검증'));assert.equal(targets.find(row=>row.id===first.id).delivery_at,delivery);
+ await api('bulk',{action:'approve',items:targets.map(({id,version})=>({id,version})),reviewer:'승인담당자'});
+ targets=(await api('requests')).filter(row=>row.name.startsWith('일괄검증'));assert.ok(targets.every(row=>row.status==='승인 완료'&&row.delivery_at));
+ const publicDb=env.unauthenticatedContext().firestore();
+ const forged=writeBatch(publicDb),record={...item,status:'승인 대기',reviewer:'',version:1,created:serverTimestamp(),delivery_at:serverTimestamp()};forged.set(doc(publicDb,'requests','forged-delivery'),record);forged.set(doc(publicDb,'publicRequests','forged-delivery'),pub(record));await assertFails(forged.commit());
+ await api('bulk',{action:'delete',items:targets.map(({id,version})=>({id,version})),reviewer:'삭제담당자'});
+ assert.ok(!(await api('requests')).some(row=>row.name.startsWith('일괄검증')));
+ await api('logout',{});
+ const summaries=await api('requests');assert.ok(!summaries.some(row=>targets.some(target=>target.id===row.id)));
+});

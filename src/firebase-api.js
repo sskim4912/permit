@@ -14,7 +14,7 @@ export const ADMIN_UID = 'ICEik0y5U3aETq3mvW7sesAsNRB2';
 const ADMIN_EMAIL = 'sskim07@gsenc.com';
 const FIELDS = ['visit_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team'];
 const PUBLIC_FIELDS = ['visit_date','purpose','team','status','reviewer','version','created'];
-const stages = ['현장 제출','현장 확인','발주처 제출','승인 완료'];
+const stages = ['승인 대기','현장 제출','현장 확인','발주처 제출','승인 완료'];
 function payload(item) {
   const result=Object.fromEntries(FIELDS.map(key=>[key,String(item[key]??'').trim()]));
   for(const key of ['visit_date','birth']) {
@@ -26,7 +26,7 @@ function payload(item) {
   return result;
 }
 const summary=item=>Object.fromEntries(PUBLIC_FIELDS.map(key=>[key,item[key]]));
-const serialize=snapshot=>({id:snapshot.id,...snapshot.data(),created:snapshot.data().created?.toDate?.().toISOString()||''});
+const serialize=snapshot=>({id:snapshot.id,...snapshot.data(),created:snapshot.data().created?.toDate?.().toISOString()||'',...(snapshot.data().delivery_at?{delivery_at:snapshot.data().delivery_at.toDate().toISOString()}:{})});
 export function createPermitAPI({config=firebaseConfig, emulator=false, name='permit'}={}) {
   const app=initializeApp(config,name),auth=getAuth(app),db=getFirestore(app);
   if(emulator){connectAuthEmulator(auth,'http://127.0.0.1:9099',{disableWarnings:true});connectFirestoreEmulator(db,'127.0.0.1',8080);}
@@ -50,8 +50,31 @@ export function createPermitAPI({config=firebaseConfig, emulator=false, name='pe
     if(path==='requests'){
       if(!Array.isArray(data.items)||data.items.length<1||data.items.length>10)throw Error('1~10명씩 제출해 주세요.');
       const items=data.items.map(payload),batch=writeBatch(db);
-      for(const item of items){const ref=doc(collection(db,'requests'));const record={...item,status:'현장 제출',reviewer:'',version:1,created:serverTimestamp()};batch.set(ref,record);batch.set(doc(db,'publicRequests',ref.id),summary(record));}
+      for(const item of items){const ref=doc(collection(db,'requests'));const record={...item,status:'승인 대기',reviewer:'',version:1,created:serverTimestamp()};batch.set(ref,record);batch.set(doc(db,'publicRequests',ref.id),summary(record));}
       await batch.commit();return {count:items.length};
+    }
+    if(path==='bulk'){
+      requireAdmin();
+      if(!['approve','delete','delivered'].includes(data.action))throw Error('처리 방법을 확인해 주세요.');
+      const reviewer=String(data.reviewer||'').trim();if(!reviewer||reviewer.length>50)throw Error('처리자 이름을 입력해 주세요.');
+      if(!Array.isArray(data.items)||data.items.length<1||data.items.length>10||new Set(data.items.map(item=>item.id)).size!==data.items.length)throw Error('한 번에 1~10명을 선택해 주세요.');
+      await runTransaction(db,async transaction=>{
+        const references=data.items.map(item=>doc(db,'requests',String(item.id)));
+        const snapshots=[];
+        for(const reference of references)snapshots.push(await transaction.get(reference));
+        for(let index=0;index<snapshots.length;index++){
+          const snapshot=snapshots[index],item=data.items[index];
+          if(!snapshot.exists()||snapshot.data().version!==item.version)throw Error('선택 내역이 변경되었거나 삭제되었습니다. 새로고침 후 다시 선택해 주세요.');
+        }
+        for(let index=0;index<snapshots.length;index++){
+          const before=snapshots[index].data(),reference=references[index],publicRef=doc(db,'publicRequests',reference.id);
+          if(data.action==='delete'){transaction.delete(reference);transaction.delete(publicRef);continue;}
+          const record={...before,reviewer,version:before.version+1};
+          if(data.action==='approve')record.status='승인 완료';
+          if(data.action==='delivered')record.delivery_at=serverTimestamp();
+          transaction.set(reference,record);transaction.set(publicRef,summary(record));
+        }
+      });return {count:data.items.length};
     }
     if(path==='update'){
       requireAdmin();const reviewer=String(data.reviewer||'').trim();if(!reviewer||reviewer.length>50)throw Error('현장 확인자 이름을 입력해 주세요.');
@@ -62,7 +85,7 @@ export function createPermitAPI({config=firebaseConfig, emulator=false, name='pe
         if(snapshot.data().version!==data.version)throw Error('다른 담당자가 변경했습니다. 새로고침 후 다시 시도해 주세요.');
         if(data.action==='delete'){transaction.delete(ref);transaction.delete(publicRef);return;}
         if(!stages.includes(data.status))throw Error('상태를 확인해 주세요.');
-        const record={...payload(data),status:data.status,reviewer,version:data.version+1,created:snapshot.data().created};
+        const record={...snapshot.data(),...payload(data),status:data.status,reviewer,version:data.version+1,created:snapshot.data().created};
         transaction.set(ref,record);transaction.set(publicRef,summary(record));
       });return {};
     }
