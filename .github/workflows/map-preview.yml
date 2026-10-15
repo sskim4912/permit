@@ -36,6 +36,8 @@ jobs:
           npx --no-install firebase deploy --only hosting --config preview/firebase.json --project permit-daesan-461e8 --non-interactive
           curl --fail --retry 5 --retry-all-errors --retry-delay 5 --silent --show-error https://permit-daesan-design-preview.web.app/ -o /tmp/published-preview.html
           grep -q '운영 사이트 및 실제 신청 데이터와 연결되지 않습니다' /tmp/published-preview.html
+          curl --fail --retry 5 --retry-all-errors --retry-delay 5 --silent --show-error https://permit-daesan-design-preview.web.app/reports/permit/report.pptx -o /tmp/published-report.pptx
+          python3 -c "import zipfile; z=zipfile.ZipFile('/tmp/published-report.pptx'); assert len([n for n in z.namelist() if n.startswith('ppt/slides/slide') and n.endswith('.xml')]) == 3"
           printf '%s\n' 'https://permit-daesan-design-preview.web.app/' > preview-url.txt
           printf '%s\n' "$GITHUB_SHA" > preview-published-commit.txt
           git config user.name 'github-actions[bot]'
