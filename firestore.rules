@@ -1,0 +1,60 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null && request.auth.uid == 'ICEik0y5U3aETq3mvW7sesAsNRB2';
+    }
+    function text(value) { return value is string && value.size() <= 200; }
+    function valid(d) {
+      return d.keys().hasAll(['visit_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team','status','reviewer','version','created'])
+        && d.keys().hasOnly(['visit_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team','status','reviewer','version','created'])
+        && d.visit_date is string && d.visit_date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && d.birth is string && d.birth.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && text(d.purpose) && d.purpose.size() > 0
+        && text(d.name) && d.name.size() > 0
+        && text(d.team) && d.team.size() > 0
+        && text(d.phone) && d.phone.size() > 0
+        && text(d.plate) && text(d.vehicle_type) && text(d.vehicle_name)
+        && d.gate in ['서문','정문'] && d.role in ['운전자','동승자','도보']
+        && d.shoes in ['필요없음','230','235','240','245','250','255','260','265','270','275','280','285','290','295','300']
+        && d.status in ['현장 제출','현장 확인','발주처 제출','승인 완료']
+        && d.reviewer is string && d.reviewer.size() <= 50
+        && d.version is int && d.created is timestamp;
+    }
+    function publicData(d) {
+      return {'visit_date':d.visit_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':d.reviewer,'version':d.version,'created':d.created};
+    }
+    match /requests/{id} {
+      allow read: if isAdmin();
+      allow create: if valid(request.resource.data)
+        && request.resource.data.status == '현장 제출'
+        && request.resource.data.reviewer == ''
+        && request.resource.data.version == 1
+        && request.resource.data.created == request.time
+        && getAfter(/databases/$(database)/documents/publicRequests/$(id)).data == publicData(request.resource.data);
+      allow update: if isAdmin() && valid(request.resource.data)
+        && request.resource.data.reviewer.size() > 0
+        && request.resource.data.version == resource.data.version + 1
+        && request.resource.data.created == resource.data.created
+        && getAfter(/databases/$(database)/documents/publicRequests/$(id)).data == publicData(request.resource.data);
+      allow delete: if isAdmin() && !existsAfter(/databases/$(database)/documents/publicRequests/$(id));
+    }
+    match /publicRequests/{id} {
+      // 공개 현황에는 신청자의 이름·생년월일·전화번호·차량번호를 저장하지 않는다.
+      allow read: if true;
+      allow create: if request.resource.data == publicData(getAfter(/databases/$(database)/documents/requests/$(id)).data)
+        && getAfter(/databases/$(database)/documents/requests/$(id)).data.created == request.time;
+      allow update: if isAdmin()
+        && request.resource.data == publicData(getAfter(/databases/$(database)/documents/requests/$(id)).data);
+      allow delete: if isAdmin() && !existsAfter(/databases/$(database)/documents/requests/$(id));
+    }
+    match /settings/mail {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['recipient'])
+        && request.resource.data.recipient is string
+        && request.resource.data.recipient.size() <= 254
+        && request.resource.data.recipient.matches('^[^\\s@]+@[^\\s@]+[.][^\\s@]+$');
+    }
+  }
+}
