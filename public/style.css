@@ -10,4 +10,31 @@
 .site-header .brand{display:flex;align-items:center;flex:none}.brand img{display:block;width:180px;height:68px;object-fit:contain}.admin-access{display:inline-flex;align-items:center;justify-content:center;gap:8px;color:#21476c;padding:10px 5px;background:transparent;font-size:15px;white-space:nowrap}.admin-access svg{flex:none}.heading h1{margin-bottom:0}.site-header{height:88px}
 @media(max-width:720px){.site-header{height:76px;padding:0 12px}.brand img{width:132px;height:56px}.site-header .admin-access{font-size:12px;padding:10px 0;gap:5px}.heading h1{font-size:24px;line-height:1.5;word-break:keep-all}.admin-access svg{width:18px;height:18px}}
 
-.gate-maps{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}.gate-map{display:inline-flex;align-items:center;min-height:44px;text-decoration:none;white-space:nowrap;font-size:14px}.section-title{flex-wrap:wrap;gap:12px}@media(max-width:480px){.gate-maps{gap:6px}.gate-map{padding:10px 8px;font-size:13px}}
+/* Shared menu sizing and restrained visual hierarchy. */
+button,.gate-map{border-radius:8px;transition:background-color .16s,border-color .16s,box-shadow .16s}
+button:focus-visible,.gate-map:focus-visible{outline:3px solid #95cab9;outline-offset:3px}
+button.primary,button.outline,button.danger{min-height:44px;padding:10px 16px;font-size:14px}
+button.outline:hover:not(:disabled){background:#f1f7f4;border-color:#a8c3b5}
+button.primary:hover:not(:disabled){background:#09634e}
+button.danger:hover:not(:disabled){background:#fff3f1}
+.gate-maps{display:grid;grid-template-columns:repeat(2,184px);gap:10px}
+.gate-map{display:flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 12px;text-decoration:none;white-space:nowrap;font-size:13px;font-weight:600;color:#28614f;background:#f6faf8;border:1px solid #d4e5dc;line-height:1}
+.gate-map svg{width:18px;height:18px;flex:none;color:#41836d}
+.gate-map .external-arrow{color:#7b998c;font-size:15px}
+.gate-map:hover{background:#eaf4ee;border-color:#a8cbb8;box-shadow:0 2px 6px #214b3108}
+#requestForm>.section-title{padding-bottom:18px;border-bottom:1px solid #e7eeea;flex-wrap:wrap;gap:16px;margin-bottom:12px}
+.site-header .admin-access{min-height:44px;min-width:184px;padding:10px 16px;border:1px solid #d4e5dc;border-radius:8px;font-size:14px;color:#28614f;background:#f6faf8}
+.site-header .admin-access:hover{background:#eaf4ee;border-color:#a8cbb8}
+.form-actions .primary{min-width:184px}
+.bulk-toolbar>div>button{min-width:144px}
+.filters #refresh{width:44px;height:44px;padding:0;font-size:21px}
+.filters input,.filters select{height:44px;border-radius:8px}
+@media(max-width:720px){
+ .site-header .admin-access{min-width:0;min-height:44px;font-size:12px;padding:10px 12px;gap:6px}
+ .gate-maps{grid-template-columns:repeat(2,minmax(0,1fr));width:100%;gap:8px}
+ #requestForm>.section-title{gap:14px;align-items:flex-start}
+ .gate-map{font-size:12px;padding:0 8px;gap:5px}
+ .gate-map svg{width:16px;height:16px}
+ .bulk-toolbar>div>button{min-width:0;padding:10px 5px;font-size:11px}
+ .filters #refresh{width:42px;height:auto;min-height:44px}
+}
