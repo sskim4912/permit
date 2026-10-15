@@ -1,0 +1,1 @@
+{"hosting":{"site":"permit-daesan-461e8","public":".","ignore":["firebase.json","**/.*"],"headers":[{"source":"**","headers":[{"key":"Cache-Control","value":"no-cache"}]}]}}
