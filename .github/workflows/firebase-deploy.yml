@@ -30,11 +30,14 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run test:ui
+      - run: node --test tests/hosting.test.js
       - name: Test Firebase authentication and Firestore rules locally
         run: npm test
         env:
           FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true'
-      - uses: actions/upload-artifact@v5
+      - name: Stamp deployment commit
+        run: node -e "require('fs').writeFileSync('public/deployment.json', JSON.stringify({commit:process.env.GITHUB_SHA}))"
+      - uses: actions/upload-artifact@v6
         with:
           name: firebase-site
           path: public/
@@ -75,7 +78,7 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v6
         with:
           name: firebase-site
           path: public/
@@ -90,6 +93,5 @@ jobs:
           FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true'
       - name: Check published homepage
         run: |
-          curl --fail --retry 3 --retry-delay 5 --silent --show-error https://permit-daesan-461e8.web.app/ -o /tmp/permit-home.html
-          grep -q '대산 출입관리' /tmp/permit-home.html
+          node scripts/verify-hosting.mjs
           echo 'Published: https://permit-daesan-461e8.web.app' >> "$GITHUB_STEP_SUMMARY"
