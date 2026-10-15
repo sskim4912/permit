@@ -104,7 +104,7 @@ test('one shared header populates multiple visitors, draft appears below and sub
   enter('name','바뀐이름');d.querySelector('#list [data-draft]').click();assert.equal(d.querySelector('[name="name"]').value,'첫방문자');assert.equal(d.querySelectorAll('.person').length,2);
   await d.querySelector('#requestForm').onsubmit({preventDefault(){}});
   assert.equal(submitted[0].items.length,2);assert.ok(submitted[0].items.every(item=>item.purpose==='공통 회의'&&item.team==='공무팀'));
-  assert.equal(w.sessionStorage.getItem('permit-draft'),null);assert.equal(d.querySelectorAll('#list [data-draft]').length,0);assert.match(d.querySelector('#list').textContent,/현장 제출/);assert.equal(d.querySelector('[name="name"]').value,'');
+  assert.equal(w.sessionStorage.getItem('permit-draft'),null);assert.equal(d.querySelectorAll('#list [data-draft]').length,0);d.querySelector('[data-status=""]').click();assert.match(d.querySelector('#list').textContent,/현장 제출/);assert.equal(d.querySelector('[name="name"]').value,'');
  }finally{dom.window.close();}
 });
 test('restoring a legacy draft preserves different visitor dates and purposes',async()=>{
@@ -113,5 +113,17 @@ test('restoring a legacy draft preserves different visitor dates and purposes',a
   const saved=[{visit_date:'2026-10-15',purpose:'회의',team:'안전팀',gate:'서문',name:'방문자1'},{visit_date:'2026-10-16',purpose:'점검',team:'공무팀',gate:'정문',name:'방문자2'}];
   w.sessionStorage.setItem('permit-draft',JSON.stringify(saved));d.querySelector('#loadDraft').click();d.querySelector('#draft').click();
   const restored=JSON.parse(w.sessionStorage.getItem('permit-draft'));assert.equal(restored[1].visit_date,'2026-10-16');assert.equal(restored[1].purpose,'점검');assert.equal(restored[1].gate,'정문');
+ }finally{dom.window.close();}
+});
+
+test('vehicle type is a two-choice selector and draft status persists while editing and after filters',async()=>{
+ const {dom,w,d,enter}=await requestPage();
+ try{
+  const select=d.querySelector('[name="vehicle_type"]');assert.equal(select.tagName,'SELECT');assert.deepEqual([...select.options].map(option=>option.value),['승용','승합']);select.value='승합';
+  enter('name','가상방문자');enter('birth','19900123');enter('phone','01000000000');
+  d.querySelector('#dateFilter').value='2099-01-01';d.querySelector('#search').value='no match';d.querySelector('[data-status="승인 완료"]').click();
+  d.querySelector('#draft').click();assert.match(d.querySelector('#draftStatus').textContent,/이 탭에 임시 저장된 신청이 있습니다/);assert.match(d.querySelector('#draftStatus').textContent,/1명/);assert.equal(d.querySelector('.tab.selected').dataset.status,'작성 중');assert.equal(d.querySelectorAll('#list [data-draft]').length,1);assert.equal(d.querySelector('#dateFilter').value,'');assert.equal(d.querySelector('#search').value,'');
+  enter('name','수정 중');assert.match(d.querySelector('#draftStatus').textContent,/신청이 있습니다/);assert.equal(JSON.parse(w.sessionStorage.getItem('permit-draft'))[0].vehicle_type,'승합');
+  d.querySelector('#list [data-draft]').click();assert.equal(d.querySelector('[name="vehicle_type"]').value,'승합');assert.equal(d.querySelector('[name="name"]').value,'가상방문자');
  }finally{dom.window.close();}
 });
