@@ -6,3 +6,4 @@ node_modules/
 *-debug.log
 .env
 .env.*
+gha-creds-*.json

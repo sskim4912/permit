@@ -38,4 +38,6 @@ npm start
 
 ## 배포
 
+PC 설치 없이 GitHub Actions로 게시할 수 있습니다. 자동화는 `.github/workflows/firebase-deploy.yml`에 있으며, Firebase 전용 서비스 계정을 만들어 GitHub Actions의 `FIREBASE_SERVICE_ACCOUNT` secret으로 연결하는 최초 1회 설정이 필요합니다. 설정 순서는 DEPLOY.md의 GitHub 자동 배포 절을 참고하세요. 코드 push만으로 권한이 생기지는 않습니다.
+
 [DEPLOY.md](DEPLOY.md)를 따르세요. 서비스 계정 비밀키나 비밀번호를 저장소에 넣지 마세요. Firebase 웹 앱 구성은 공개 설정입니다. 로컬 임시 저장은 sessionStorage이며 공용 기기에서는 사용 후 탭을 닫으세요. CSV에는 개인정보가 포함됩니다. 엑셀에서 휴대전화번호 열을 텍스트로 가져오면 앞자리 0을 유지할 수 있습니다. 개인별 감사 이력과 보관기간 자동 삭제는 아직 제공하지 않습니다.
