@@ -9,3 +9,5 @@
 
 .site-header .brand{display:flex;align-items:center;flex:none}.brand img{display:block;width:180px;height:68px;object-fit:contain}.admin-access{display:inline-flex;align-items:center;justify-content:center;gap:8px;color:#21476c;padding:10px 5px;background:transparent;font-size:15px;white-space:nowrap}.admin-access svg{flex:none}.heading h1{margin-bottom:0}.site-header{height:88px}
 @media(max-width:720px){.site-header{height:76px;padding:0 12px}.brand img{width:132px;height:56px}.site-header .admin-access{font-size:12px;padding:10px 0;gap:5px}.heading h1{font-size:24px;line-height:1.5;word-break:keep-all}.admin-access svg{width:18px;height:18px}}
+
+.gate-maps{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}.gate-map{display:inline-flex;align-items:center;min-height:44px;text-decoration:none;white-space:nowrap;font-size:14px}.section-title{flex-wrap:wrap;gap:12px}@media(max-width:480px){.gate-maps{gap:6px}.gate-map{padding:10px 8px;font-size:13px}}
