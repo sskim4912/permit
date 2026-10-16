@@ -117,3 +117,16 @@ test('delivered and approved own applications remain visible but cannot be selec
   records()[0].delivery_at='2026-10-16T00:00:00Z';await d.querySelector('#refresh').onclick();assert.equal(d.querySelectorAll('[data-edit]').length,0);assert.equal(d.querySelectorAll('[data-select]').length,0);assert.match(d.querySelector('#list').textContent,/관리자에게 문의/);
  }finally{dom.window.close();}
 });
+
+test('row deletion requires actor and confirmation; lookup is labelled and preserves author search',async()=>{
+ const {dom,w,d,calls,records}=await setup({own:true});try{
+  assert.equal(d.querySelector('#refresh').textContent,'조회');assert.equal(d.querySelectorAll('[data-delete]').length,1);
+  const clickDelete=()=>d.querySelector('#list').onclick({target:d.querySelector('[data-delete="one"]')});
+  await clickDelete();assert.equal(d.activeElement.id,'reviewer');assert.equal(calls.length,0);
+  d.querySelector('#search').value='최초 작성자';await d.querySelector('#refresh').onclick();assert.equal(d.querySelectorAll('[data-record]').length,1);assert.equal(d.querySelector('#search').value,'최초 작성자');
+  d.querySelector('#reviewer').value='삭제 담당';w.confirm=()=>false;await clickDelete();assert.equal(calls.length,0);w.confirm=()=>true;await clickDelete();assert.equal(calls[0].path,'owner-delete');assert.equal(calls[0].data.items.length,1);assert.equal(records().some(r=>r.id==='one'),false);assert.equal(records().length,2);
+ }finally{dom.window.close();}
+});
+test('unowned requests show disabled edit/delete actions without ownership escalation',async()=>{
+ const {dom,d}=await setup();try{assert.equal(d.querySelector('#manageHead').hidden,false);assert.equal(d.querySelectorAll('.row-actions button:disabled').length,6);assert.equal(d.querySelectorAll('[data-edit],[data-delete]').length,0);assert.equal(d.querySelector('#ownerHelp').hidden,false);assert.match(d.querySelector('#ownerHelp').textContent,/이전 신청/);}finally{dom.window.close();}
+});
