@@ -7,9 +7,10 @@ service cloud.firestore {
     function text(value) { return value is string && value.size() <= 200; }
     function valid(d) {
       return d.keys().hasAll(['visit_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team','status','reviewer','version','created'])
-        && d.keys().hasOnly(['visit_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team','status','reviewer','version','created','delivery_at'])
+        && d.keys().hasOnly(['visit_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team','status','reviewer','version','created','delivery_at','visit_end_date'])
         && (!('delivery_at' in d) || (d.delivery_at is timestamp && d.delivery_at <= request.time))
         && d.visit_date is string && d.visit_date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && (!('visit_end_date' in d) || (d.visit_end_date is string && d.visit_end_date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') && d.visit_end_date >= d.visit_date))
         && d.birth is string && d.birth.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && text(d.purpose) && d.purpose.size() > 0
         && text(d.name) && d.name.size() > 0
@@ -23,7 +24,7 @@ service cloud.firestore {
         && d.version is int && d.created is timestamp;
     }
     function publicData(d) {
-      return {'visit_date':d.visit_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':d.reviewer,'version':d.version,'created':d.created};
+      return ('visit_end_date' in d) ? {'visit_date':d.visit_date,'visit_end_date':d.visit_end_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':d.reviewer,'version':d.version,'created':d.created} : {'visit_date':d.visit_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':d.reviewer,'version':d.version,'created':d.created};
     }
     match /requests/{id} {
       allow read: if isAdmin();
@@ -35,6 +36,7 @@ service cloud.firestore {
         && request.resource.data.created == request.time
         && getAfter(/databases/$(database)/documents/publicRequests/$(id)).data == publicData(request.resource.data);
       allow update: if isAdmin() && valid(request.resource.data)
+        && (!('visit_end_date' in resource.data) || ('visit_end_date' in request.resource.data))
         && (!('delivery_at' in resource.data) || ('delivery_at' in request.resource.data))
         && request.resource.data.reviewer.size() > 0
         && request.resource.data.version == resource.data.version + 1

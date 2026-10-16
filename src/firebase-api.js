@@ -12,20 +12,21 @@ export const firebaseConfig = {
 };
 export const ADMIN_UID = 'ICEik0y5U3aETq3mvW7sesAsNRB2';
 const ADMIN_EMAIL = 'sskim07@gsenc.com';
-const FIELDS = ['visit_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team'];
-const PUBLIC_FIELDS = ['visit_date','purpose','team','status','reviewer','version','created'];
+const FIELDS = ['visit_date','visit_end_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team'];
+const PUBLIC_FIELDS = ['visit_date','visit_end_date','purpose','team','status','reviewer','version','created'];
 const stages = ['승인 대기','현장 제출','현장 확인','발주처 제출','승인 완료'];
 function payload(item) {
-  const result=Object.fromEntries(FIELDS.map(key=>[key,String(item[key]??'').trim()]));
-  for(const key of ['visit_date','birth']) {
+  const result=Object.fromEntries(FIELDS.map(key=>[key,String(item[key]??(key==='visit_end_date'?item.visit_date:'')??'').trim()]));
+  for(const key of ['visit_date','visit_end_date','birth']) {
     const value=result[key];
     if(!/^\d{4}-\d{2}-\d{2}$/.test(value)||Number.isNaN(Date.parse(value))||new Date(value).toISOString().slice(0,10)!==value) throw Error('날짜를 YYYY-MM-DD 형식으로 확인해 주세요.');
   }
+  if(result.visit_end_date<result.visit_date)throw Error('방문종료일은 방문시작일과 같거나 이후여야 합니다.');
   if(['purpose','team','name','phone'].some(k=>!result[k])||Object.values(result).some(v=>v.length>200))throw Error('필수 항목을 입력하고 항목당 200자 이하로 작성해 주세요.');
   if(!['서문','정문'].includes(result.gate)||!['운전자','동승자','도보'].includes(result.role)||!['필요없음',...Array.from({length:15},(_,i)=>String(230+i*5))].includes(result.shoes))throw Error('출입위치, 탑승 구분, 안전화를 확인해 주세요.');
   return result;
 }
-const summary=item=>Object.fromEntries(PUBLIC_FIELDS.map(key=>[key,item[key]]));
+const summary=item=>Object.fromEntries(PUBLIC_FIELDS.filter(key=>key in item).map(key=>[key,item[key]]));
 const serialize=snapshot=>({id:snapshot.id,...snapshot.data(),created:snapshot.data().created?.toDate?.().toISOString()||'',...(snapshot.data().delivery_at?{delivery_at:snapshot.data().delivery_at.toDate().toISOString()}:{})});
 export function createPermitAPI({config=firebaseConfig, emulator=false, name='permit'}={}) {
   const app=initializeApp(config,name),auth=getAuth(app),db=getFirestore(app);

@@ -16,7 +16,7 @@ async function setup({draft=null,blocked=false}={}){
   if(path==='session')return {reviewer:signed};
   if(path==='login'){if(data.password!=='test-password')throw Error('비밀번호가 맞지 않습니다.');signed=true;return {};}
   if(path==='logout'){signed=false;return {};}
-  if(path==='requests'&&!data)return records.map(row=>signed?{...row}:Object.fromEntries(['id','visit_date','purpose','team','status','reviewer','version','created'].map(key=>[key,row[key]])));
+  if(path==='requests'&&!data)return records.map(row=>signed?{...row}:Object.fromEntries(['id','visit_date','visit_end_date','purpose','team','status','reviewer','version','created'].map(key=>[key,row[key]])));
   if(path==='requests'){calls.push({path,data:structuredClone(data)});records.push(...data.items.map((row,index)=>({...row,id:'new'+index,status:'승인 대기',reviewer:'',version:1,created:'2026-10-15T01:00:00Z'})));return {count:data.items.length};}
   if(!signed)throw Error('관리자 로그인이 필요합니다.');
   if(path==='settings'){if(data)recipient=data.recipient;return {recipient};}
@@ -66,4 +66,26 @@ test('CSV is admin-only and preserves phone text while escaping formulas; logout
 });
 test('status and search filters clear selections and map legacy statuses without rewriting data',async()=>{
  const {dom,d,login,change,records}=await setup();try{await login();d.querySelector('#selectAll').click();assert.equal(d.querySelectorAll('[data-select]:checked').length,3);d.querySelector('#selectAll').click();assert.equal(d.querySelectorAll('[data-select]:checked').length,0);d.querySelector('[data-select="one"]').click();change('statusFilter','승인 대기');assert.equal(d.querySelectorAll('[data-record]').length,2);assert.equal(d.querySelector('#selectedCount').textContent,'0명 선택 · 최대 10명');assert.match(d.querySelector('#list').textContent,/기존 전달 기록/);assert.equal(records()[0].status,'현장 제출');assert.equal(records()[1].status,'발주처 제출');change('statusFilter','승인 완료');assert.equal(d.querySelectorAll('[data-record]').length,1);}finally{dom.window.close();}
+});
+
+test('visit periods validate ordering, filter inclusive dates and survive edit, email and CSV',async()=>{
+ const {dom,w,d,enter,submit,calls,login,change,getBlob,records}=await setup({draft:[{...base,visit_date:'2026-10-20',visit_end_date:'2026-10-23'}]});
+ try{
+  assert.equal(d.querySelector('[name="visit_date"]').type,'date');assert.equal(d.querySelector('[name="visit_end_date"]').type,'date');
+  enter('visit_end_date','2026-10-19');await submit();assert.equal(calls.length,0);assert.equal(d.activeElement.name,'visit_end_date');assert.match(d.querySelector('#formError').textContent,/같거나 이후/);
+  enter('visit_end_date','2026-10-23');await submit();assert.equal(calls[0].data.items[0].visit_end_date,'2026-10-23');
+  change('dateFilter','2026-10-22');assert.equal(d.querySelectorAll('[data-record]').length,1);assert.match(d.querySelector('#list').textContent,/2026-10-20 ~ 2026-10-23/);
+  change('dateFilter','2026-10-24');assert.equal(d.querySelectorAll('[data-record]').length,0);
+  change('dateFilter','2026-10-23');await login();d.querySelector('#reviewer').value='담당자';d.querySelector('[data-select]').click();await d.querySelector('#mail').onclick();assert.match(d.querySelector('#mailBody').value,/방문시작일: 2026-10-20/);assert.match(d.querySelector('#mailBody').value,/방문종료일: 2026-10-23/);
+  await d.querySelector('#download').onclick();const csv=await getBlob().text();assert.match(csv,/방문종료일/);assert.match(csv,/2026-10-23/);
+  d.querySelector('[data-edit]').click();assert.equal(d.querySelector('[name="visit_end_date"]').value,'2026-10-23');enter('visit_end_date','2026-10-25');await submit();assert.equal(records().find(r=>r.id==='new0').visit_end_date,'2026-10-25');
+ }finally{dom.window.close();}
+});
+test('legacy drafts and records use a same-day end; starting date changes keep same-day visits aligned',async()=>{
+ const {dom,w,d,login,change}=await setup({draft:[{...base}]});try{
+  assert.equal(d.querySelector('[name="visit_end_date"]').value,base.visit_date);
+  const start=d.querySelector('[name="visit_date"]');start.value='2026-10-21';start.dispatchEvent(new w.Event('change',{bubbles:true}));assert.equal(d.querySelector('[name="visit_end_date"]').value,'2026-10-21');
+  await login();d.querySelector('[data-edit]').click();assert.equal(d.querySelector('[name="visit_end_date"]').value,base.visit_date);
+  change('dateFilter','2026-10-16');assert.equal(d.querySelectorAll('[data-record]').length,1); // unsaved editor remains visible
+ }finally{dom.window.close();}
 });
