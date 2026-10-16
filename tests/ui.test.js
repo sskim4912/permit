@@ -4,27 +4,33 @@ import {readFileSync} from 'node:fs';
 import {JSDOM} from 'jsdom';
 const tick=()=>new Promise(resolve=>setTimeout(resolve,5));
 const base={visit_date:'2026-10-15',purpose:'회의',team:'공무팀',gate:'서문',name:'가상방문자',birth:'1990-01-23',phone:'010-0000-0000',plate:'=formula',vehicle_type:'승용',vehicle_name:'캐스퍼',role:'운전자',shoes:'280',reviewer:'',version:1,created:'2026-10-15T00:00:00Z'};
-async function setup({draft=null,blocked=false}={}){
+async function setup({draft=null,blocked=false,own=false}={}){
  const dom=new JSDOM(readFileSync('public/index.html','utf8'),{url:'https://permit.example',runScripts:'outside-only'}),w=dom.window,d=w.document;
  w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};w.confirm=()=>true;w.setInterval=()=>0;
  const realTimer=w.setTimeout.bind(w);w.setTimeout=(fn,ms)=>ms===350?realTimer(fn,0):0;w.Blob=Blob;
  if(draft)w.sessionStorage.setItem('permit-draft',JSON.stringify(draft));if(blocked)Object.defineProperty(w,'sessionStorage',{get(){throw Error('blocked');}});
  let signed=false,recipient='test@example.com',blob;const calls=[];
- let records=[{...base,id:'one',status:'현장 제출'},{...base,id:'two',name:'예시방문자',status:'발주처 제출'},{...base,id:'three',name:'테스트방문자',status:'승인 완료'}];
+ let records=[{...base,id:'one',status:'현장 제출',own,author_name:'최초 작성자'},{...base,id:'two',name:'예시방문자',status:'발주처 제출'},{...base,id:'three',name:'테스트방문자',status:'승인 완료'}];
  w.URL.createObjectURL=value=>{blob=value;return 'blob:test';};w.URL.revokeObjectURL=()=>{};w.HTMLAnchorElement.prototype.click=function(){};
  w.createPermitAPI=()=>({api:async(path,data)=>{
   if(path==='session')return {reviewer:signed};
   if(path==='login'){if(data.password!=='test-password')throw Error('비밀번호가 맞지 않습니다.');signed=true;return {};}
   if(path==='logout'){signed=false;return {};}
-  if(path==='requests'&&!data)return records.map(row=>signed?{...row}:Object.fromEntries(['id','visit_date','visit_end_date','purpose','team','status','reviewer','version','created'].map(key=>[key,row[key]])));
-  if(path==='requests'){calls.push({path,data:structuredClone(data)});records.push(...data.items.map((row,index)=>({...row,id:'new'+index,status:'승인 대기',reviewer:'',version:1,created:'2026-10-15T01:00:00Z'})));return {count:data.items.length};}
+  if(path==='requests'&&!data)return records.map(row=>signed||row.own?{...row}:Object.fromEntries(['id','visit_date','visit_end_date','purpose','team','status','reviewer','version','created'].map(key=>[key,row[key]])));
+  if(path==='requests'){calls.push({path,data:structuredClone(data)});records.push(...data.items.map((row,index)=>({...row,own:true,author_name:data.author_name,id:'new'+index,status:'승인 대기',reviewer:'',version:1,created:'2026-10-15T01:00:00Z'})));return {count:data.items.length};}
+  if(path==='owner-update'){
+   const row=records.find(r=>r.id===data.id);if(!row?.own||!['승인 대기','현장 제출'].includes(row.status)||row.delivery_at)throw Error('본인 승인 대기만 수정할 수 있습니다.');calls.push({path,data:structuredClone(data)});Object.assign(row,data,{modified_by:data.reviewer,modified_at:'2026-10-16T00:00:00Z',version:row.version+1});return {};
+  }
+  if(path==='owner-delete'){
+   if(data.items.some(i=>!records.find(r=>r.id===i.id)?.own))throw Error('본인 신청만 삭제');calls.push({path,data:structuredClone(data)});records=records.filter(r=>!data.items.some(i=>i.id===r.id));return {};
+  }
   if(!signed)throw Error('관리자 로그인이 필요합니다.');
   if(path==='settings'){if(data)recipient=data.recipient;return {recipient};}
   if(path==='update'){calls.push({path,data:structuredClone(data)});const index=records.findIndex(row=>row.id===data.id);if(index<0||records[index].version!==data.version)throw Error('다른 담당자가 변경했습니다.');records[index]={...records[index],...data,version:data.version+1};return {};}
   if(path==='bulk'){calls.push({path,data:structuredClone(data)});for(const item of data.items){const row=records.find(row=>row.id===item.id);if(!row||row.version!==item.version)throw Error('선택 내역이 변경되었습니다.');}
    for(const item of data.items){const row=records.find(row=>row.id===item.id);if(data.action==='delete')records=records.filter(row=>row.id!==item.id);else{row.version++;row.reviewer=data.reviewer;if(data.action==='approve')row.status='승인 완료';if(data.action==='delivered')row.delivery_at='2026-10-15T02:00:00Z';}}return {};}
  }});
- w.eval(readFileSync('src/app.js','utf8').replace("import {createPermitAPI} from './firebase-api.js';",''));await tick();
+ w.eval(readFileSync('src/app.js','utf8').replace("import {createPermitAPI} from './firebase-api.js';",''));await tick();d.querySelector('#authorName').value='테스트 작성자';
  const enter=(key,value,index=0)=>{const input=d.querySelectorAll(`[name="${key}"]`)[index];input.value=value;input.dispatchEvent(new w.Event('input',{bubbles:true}));return input;};
  const login=async()=>{await d.querySelector('#login').onclick();d.querySelector('#password').value='test-password';await d.querySelector('#loginForm').onsubmit({preventDefault(){}});await tick();};
  const change=(id,value)=>{d.querySelector('#'+id).value=value;d.querySelector('#'+id).dispatchEvent(new w.Event('change',{bubbles:true}));};
@@ -55,7 +61,7 @@ test('admin selects and approves multiple rows, requires operator name and suppo
 test('mail opening alone never marks delivered; explicit sent confirmation records all selected rows',async()=>{
  const {dom,d,login,calls}=await setup();try{await login();d.querySelector('#reviewer').value='담당자';d.querySelector('[data-select="one"]').click();await d.querySelector('#mail').onclick();assert.equal(d.querySelector('#mailDialog').open,true);assert.match(d.querySelector('#mailBody').value,/가상방문자/);assert.equal(calls.length,0);await d.querySelector('#recordMail').onclick();assert.equal(calls[0].data.action,'delivered');assert.equal(d.querySelector('#mailDialog').open,false);assert.match(d.querySelector('#list').textContent,/10/);}finally{dom.window.close();}
 });
-test('delete is administrator-only, requires confirmation and clears selected rows',async()=>{
+test('administrator deletion requires confirmation and clears selected rows',async()=>{
  const {dom,w,d,login,calls}=await setup();try{await login();d.querySelector('#reviewer').value='담당자';d.querySelector('[data-select="one"]').click();w.confirm=()=>false;await d.querySelector('#delete').onclick();assert.equal(calls.length,0);w.confirm=()=>true;await d.querySelector('#delete').onclick();assert.equal(calls[0].data.action,'delete');assert.equal(d.querySelector('[data-record="one"]'),null);}finally{dom.window.close();}
 });
 test('inline editor retains unsaved edits across refresh and cancellation restores applicant draft',async()=>{
@@ -87,5 +93,27 @@ test('legacy drafts and records use a same-day end; starting date changes keep s
   const start=d.querySelector('[name="visit_date"]');start.value='2026-10-21';start.dispatchEvent(new w.Event('change',{bubbles:true}));assert.equal(d.querySelector('[name="visit_end_date"]').value,'2026-10-21');
   await login();d.querySelector('[data-edit]').click();assert.equal(d.querySelector('[name="visit_end_date"]').value,base.visit_date);
   change('dateFilter','2026-10-16');assert.equal(d.querySelectorAll('[data-record]').length,1); // unsaved editor remains visible
+ }finally{dom.window.close();}
+});
+
+test('one author is required per submission and is saved with every visitor',async()=>{
+ const {dom,d,submit,calls,enter}=await setup({draft:[{...base},{...base,name:'다른 방문자'}]});try{
+  d.querySelector('#authorName').value='';await submit();assert.equal(d.activeElement.id,'authorName');assert.equal(calls.length,0);
+  d.querySelector('#authorName').value='최초 작성 담당';await submit();assert.equal(calls[0].data.author_name,'최초 작성 담당');assert.equal(calls[0].data.items.length,2);
+ }finally{dom.window.close();}
+});
+test('applicant edits only owned pending rows, records modifier and confirms deletion',async()=>{
+ const {dom,w,d,submit,calls,enter,records}=await setup({own:true});try{
+  assert.equal(d.querySelector('#mail').hidden,true);assert.equal(d.querySelector('#approve').hidden,true);assert.equal(d.querySelector('#adminSettings').hidden,true);
+  assert.equal(d.querySelectorAll('[data-edit]').length,1);assert.equal(d.querySelectorAll('[data-select]').length,1);assert.ok(!d.querySelector('#list').textContent.includes('예시방문자'));
+  d.querySelector('[data-edit]').click();assert.ok(d.querySelector('#list #requestForm'));assert.equal(d.querySelector('#authorLine').hidden,true);
+  enter('purpose','본인 수정');await submit();assert.equal(d.activeElement.id,'reviewer');assert.equal(calls.length,0);
+  d.querySelector('#reviewer').value='다른 수정 담당';await submit();assert.equal(calls[0].path,'owner-update');assert.equal(records()[0].author_name,'최초 작성자');assert.match(d.querySelector('#list').textContent,/다른 수정 담당/);
+  d.querySelector('[data-select]').click();w.confirm=()=>false;await d.querySelector('#delete').onclick();assert.equal(calls.length,1);w.confirm=()=>true;await d.querySelector('#delete').onclick();assert.equal(calls[1].path,'owner-delete');assert.equal(d.querySelector('[data-record="one"]'),null);
+ }finally{dom.window.close();}
+});
+test('delivered and approved own applications remain visible but cannot be selected or edited',async()=>{
+ const {dom,d,records}=await setup({own:true});try{
+  records()[0].delivery_at='2026-10-16T00:00:00Z';await d.querySelector('#refresh').onclick();assert.equal(d.querySelectorAll('[data-edit]').length,0);assert.equal(d.querySelectorAll('[data-select]').length,0);assert.match(d.querySelector('#list').textContent,/관리자에게 문의/);
  }finally{dom.window.close();}
 });

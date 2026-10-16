@@ -7,8 +7,10 @@ service cloud.firestore {
     function text(value) { return value is string && value.size() <= 200; }
     function valid(d) {
       return d.keys().hasAll(['visit_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team','status','reviewer','version','created'])
-        && d.keys().hasOnly(['visit_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team','status','reviewer','version','created','delivery_at','visit_end_date'])
+        && d.keys().hasOnly(['visit_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team','status','reviewer','version','created','delivery_at','visit_end_date','author_name','owner_key','modified_by','modified_at'])
         && (!('delivery_at' in d) || (d.delivery_at is timestamp && d.delivery_at <= request.time))
+        && ((!('author_name' in d) && !('owner_key' in d)) || (d.author_name is string && d.author_name.size() > 0 && d.author_name.size() <= 50 && d.owner_key is string && d.owner_key.matches('^[a-f0-9]{64}$')))
+        && ((!('modified_by' in d) && !('modified_at' in d)) || (d.modified_by is string && d.modified_by.size() > 0 && d.modified_by.size() <= 50 && d.modified_at is timestamp && d.modified_at <= request.time))
         && d.visit_date is string && d.visit_date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && (!('visit_end_date' in d) || (d.visit_end_date is string && d.visit_end_date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') && d.visit_end_date >= d.visit_date))
         && d.birth is string && d.birth.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
@@ -26,32 +28,67 @@ service cloud.firestore {
     function publicData(d) {
       return ('visit_end_date' in d) ? {'visit_date':d.visit_date,'visit_end_date':d.visit_end_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':d.reviewer,'version':d.version,'created':d.created} : {'visit_date':d.visit_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':d.reviewer,'version':d.version,'created':d.created};
     }
+    function pending(d) { return d.status in ['승인 대기','현장 제출'] && !('delivery_at' in d); }
+    function keepAuthor(before, after) {
+      return (!('author_name' in before) || after.author_name == before.author_name)
+        && (!('owner_key' in before) || after.owner_key == before.owner_key);
+    }
+    function ownerChange(before, after) {
+      return ('owner_key' in before) && pending(before) && after.owner_key == before.owner_key
+        && after.diff(before).affectedKeys().hasOnly(['visit_date','visit_end_date','purpose','team','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','version','modified_by','modified_at'])
+        && after.modified_at == request.time;
+    }
+    function deletedLog(id, before) {
+      let log = getAfter(/databases/$(database)/documents/requestDeletions/$(id)).data;
+      return log.owner_key == before.owner_key && log.version == before.version && log.deleted_at == request.time;
+    }
     match /requests/{id} {
       allow read: if isAdmin();
       allow create: if valid(request.resource.data)
         && request.resource.data.status in ['승인 대기','현장 제출']
         && !('delivery_at' in request.resource.data)
+        && !('modified_at' in request.resource.data)
         && request.resource.data.reviewer == ''
         && request.resource.data.version == 1
         && request.resource.data.created == request.time
         && getAfter(/databases/$(database)/documents/publicRequests/$(id)).data == publicData(request.resource.data);
-      allow update: if isAdmin() && valid(request.resource.data)
+      allow update: if (isAdmin() || ownerChange(resource.data,request.resource.data)) && valid(request.resource.data)
+        && keepAuthor(resource.data,request.resource.data)
         && (!('visit_end_date' in resource.data) || ('visit_end_date' in request.resource.data))
         && (!('delivery_at' in resource.data) || ('delivery_at' in request.resource.data))
-        && request.resource.data.reviewer.size() > 0
+        && (isAdmin() ? request.resource.data.reviewer.size() > 0 : request.resource.data.modified_by.size() > 0)
         && request.resource.data.version == resource.data.version + 1
         && request.resource.data.created == resource.data.created
         && getAfter(/databases/$(database)/documents/publicRequests/$(id)).data == publicData(request.resource.data);
-      allow delete: if isAdmin() && !existsAfter(/databases/$(database)/documents/publicRequests/$(id));
+      allow delete: if (isAdmin() || (pending(resource.data) && ('owner_key' in resource.data) && deletedLog(id,resource.data)))
+        && !existsAfter(/databases/$(database)/documents/publicRequests/$(id));
     }
     match /publicRequests/{id} {
       // 공개 현황에는 신청자의 이름·생년월일·전화번호·차량번호를 저장하지 않는다.
       allow read: if true;
       allow create: if request.resource.data == publicData(getAfter(/databases/$(database)/documents/requests/$(id)).data)
         && getAfter(/databases/$(database)/documents/requests/$(id)).data.created == request.time;
-      allow update: if isAdmin()
-        && request.resource.data == publicData(getAfter(/databases/$(database)/documents/requests/$(id)).data);
-      allow delete: if isAdmin() && !existsAfter(/databases/$(database)/documents/requests/$(id));
+      allow update: if request.resource.data == publicData(getAfter(/databases/$(database)/documents/requests/$(id)).data);
+      allow delete: if !existsAfter(/databases/$(database)/documents/requests/$(id));
+    }
+    // The unguessable browser key is a bearer credential, never stored in public summaries.
+    match /applicantCopies/{key}/items/{id} {
+      allow get, list: if key.matches('^[a-f0-9]{64}$');
+      allow create, update: if key.matches('^[a-f0-9]{64}$')
+        && request.resource.data.owner_key == key
+        && request.resource.data == getAfter(/databases/$(database)/documents/requests/$(id)).data;
+      allow delete: if isAdmin() || !existsAfter(/databases/$(database)/documents/requests/$(id));
+    }
+    match /requestDeletions/{id} {
+      allow read: if isAdmin();
+      allow create: if request.resource.data.keys().hasOnly(['actor_name','deleted_at','author_name','owner_key','version'])
+        && request.resource.data.actor_name is string && request.resource.data.actor_name.size() > 0 && request.resource.data.actor_name.size() <= 50
+        && request.resource.data.deleted_at == request.time
+        && (isAdmin() || (request.resource.data.owner_key == get(/databases/$(database)/documents/requests/$(id)).data.owner_key
+          && request.resource.data.version == get(/databases/$(database)/documents/requests/$(id)).data.version
+          && request.resource.data.author_name == get(/databases/$(database)/documents/requests/$(id)).data.author_name
+          && pending(get(/databases/$(database)/documents/requests/$(id)).data)
+          && !existsAfter(/databases/$(database)/documents/requests/$(id))));
     }
     match /settings/mail {
       allow read: if isAdmin();
