@@ -116,21 +116,23 @@ test('browser-owned applications enforce capability privacy, immutable authors, 
   const publicDb=env.unauthenticatedContext().firestore(),adminDb=env.authenticatedContext(ADMIN_UID).firestore();
   await assertFails(getDocs(collection(publicDb,'applicantCopies')));await assertFails(getDocs(collectionGroup(publicDb,'items')));await assertFails(getDoc(doc(publicDb,'requests',first.id)));await assertFails(getDoc(doc(publicDb,'requestDeletions',first.id)));
   const before=(await getDoc(doc(adminDb,'requests',first.id))).data();
-  async function forged(changes){const record={...before,modified_by:'위조',modified_at:serverTimestamp(),version:before.version+1,...changes};const batch=writeBatch(publicDb);batch.set(doc(publicDb,'requests',first.id),record);batch.set(doc(publicDb,'publicRequests',first.id),pub(record));return batch.commit();}
-  await assertFails(forged({owner_key:'b'.repeat(64)}));await assertFails(forged({author_name:'바꾼 작성자'}));await assertFails(forged({status:'승인 완료'}));await assertFails(forged({delivery_at:serverTimestamp()}));
-  await a.api('owner-update',{...first,purpose:'본인 수정 회의',reviewer:'실제 수정자',author_name:'무시할 작성자',status:'승인 완료'});
-  let changed=(await a.api('requests')).find(r=>r.id===first.id);assert.equal(changed.author_name,'최초 작성 담당');assert.equal(changed.modified_by,'실제 수정자');assert.ok(changed.modified_at);assert.equal(changed.status,'승인 대기');
-  await assert.rejects(()=>a.api('owner-update',{...first,reviewer:'다시 수정'}),/변경/);
+  async function forged(changes){const record={...before,modified_by:'최초 작성 담당',modified_at:serverTimestamp(),version:before.version+1,...changes};const batch=writeBatch(publicDb);batch.set(doc(publicDb,'requests',first.id),record);batch.set(doc(publicDb,'publicRequests',first.id),pub(record));return batch.commit();}
+  await assertFails(forged({modified_by:'다른 이름'}));await assertFails(forged({owner_key:'b'.repeat(64)}));await assertFails(forged({author_name:'바꾼 작성자'}));await assertFails(forged({status:'승인 완료'}));await assertFails(forged({delivery_at:serverTimestamp()}));
+  await assert.rejects(()=>a.api('owner-update',{...first,reviewer:'다른 이름'}),/최초 작성자/);await assert.rejects(()=>a.api('owner-delete',{items:[first],reviewer:'다른 이름'}),/최초 작성자/);
+  const forgedDelete=writeBatch(publicDb);forgedDelete.delete(doc(publicDb,'requests',first.id));forgedDelete.delete(doc(publicDb,'publicRequests',first.id));forgedDelete.delete(doc(publicDb,'applicantCopies','a'.repeat(64),'items',first.id));forgedDelete.set(doc(publicDb,'requestDeletions',first.id),{owner_key:'a'.repeat(64),author_name:'최초 작성 담당',actor_name:'다른 이름',version:first.version,deleted_at:serverTimestamp()});await assertFails(forgedDelete.commit());
+  await a.api('owner-update',{...first,purpose:'본인 수정 회의',reviewer:'최초 작성 담당',author_name:'무시할 작성자',status:'승인 완료'});
+  let changed=(await a.api('requests')).find(r=>r.id===first.id);assert.equal(changed.author_name,'최초 작성 담당');assert.equal(changed.modified_by,'최초 작성 담당');assert.ok(changed.modified_at);assert.equal(changed.status,'승인 대기');
+  await assert.rejects(()=>a.api('owner-update',{...first,reviewer:'최초 작성 담당'}),/변경/);
   await service.api('login',{password:'test-only-password'});await service.api('update',{...changed,purpose:'관리자 수정',reviewer:'관리 담당'});
   changed=(await a.api('requests')).find(r=>r.id===first.id);assert.equal(changed.purpose,'관리자 수정');assert.equal(changed.author_name,'최초 작성 담당');
   await service.api('bulk',{action:'delivered',items:[changed],reviewer:'발송 담당'});changed=(await a.api('requests')).find(r=>r.id===first.id);
   await assert.rejects(()=>a.api('owner-update',{...changed,reviewer:'수정 시도'}),/전달 전/);await assert.rejects(()=>a.api('owner-delete',{items:[changed],reviewer:'삭제 시도'}),/전달 전/);
   await assert.rejects(()=>a.api('bulk',{action:'approve',items:[changed],reviewer:'승인 시도'}),/관리자/);
   mine=(await a.api('requests')).filter(r=>r.own&&!r.delivery_at).slice(0,5);
-  await assert.rejects(()=>a.api('owner-delete',{items:mine.map((r,i)=>({...r,version:i===4?999:r.version})),reviewer:'삭제 담당'}),/변경/);assert.ok((await a.api('requests')).some(r=>r.id===mine[0].id));
-  await a.api('owner-delete',{items:mine,reviewer:'삭제 담당'});assert.ok(!(await a.api('requests')).some(r=>mine.some(m=>m.id===r.id)));
+  await assert.rejects(()=>a.api('owner-delete',{items:mine.map((r,i)=>({...r,version:i===4?999:r.version})),reviewer:'최초 작성 담당'}),/변경/);assert.ok((await a.api('requests')).some(r=>r.id===mine[0].id));
+  await a.api('owner-delete',{items:mine,reviewer:'최초 작성 담당'});assert.ok(!(await a.api('requests')).some(r=>mine.some(m=>m.id===r.id)));
   assert.ok(!(await b.api('requests')).some(r=>mine.some(m=>m.id===r.id)));
-  const log=(await getDoc(doc(adminDb,'requestDeletions',mine[0].id))).data();assert.equal(log.actor_name,'삭제 담당');assert.equal(log.author_name,'최초 작성 담당');
+  const log=(await getDoc(doc(adminDb,'requestDeletions',mine[0].id))).data();assert.equal(log.actor_name,'최초 작성 담당');assert.equal(log.author_name,'최초 작성 담당');
   assert.equal((await getDoc(doc(publicDb,'applicantCopies','a'.repeat(64),'items',mine[0].id))).exists(),false);
  }finally{await deleteApp(a.app);await deleteApp(b.app);await deleteApp(resumed.app);}
 });

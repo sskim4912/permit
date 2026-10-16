@@ -86,6 +86,7 @@ export function createPermitAPI({config=firebaseConfig, emulator=false, name='pe
       await runTransaction(db,async transaction=>{
         const snapshot=await transaction.get(copyRef(key,ref.id));if(!snapshot.exists())throw Error('본인 신청을 찾을 수 없습니다.');const before=snapshot.data();
         if(!editable(before))throw Error('발주처 전달 전인 승인 대기 신청만 수정할 수 있습니다.');
+        if(actor!==before.author_name)throw Error('최초 작성자 이름과 일치해야 수정·삭제할 수 있습니다.');
         if(before.version!==data.version)throw Error('신청이 변경되었습니다. 새로고침 후 확인해 주세요.');
         const record={...before,...payload(data),modified_by:actor,modified_at:serverTimestamp(),version:before.version+1};
         transaction.set(ref,record);transaction.set(doc(db,'publicRequests',ref.id),summary(record));mirror(transaction,ref,record);
@@ -96,7 +97,7 @@ export function createPermitAPI({config=firebaseConfig, emulator=false, name='pe
       if(!Array.isArray(data.items)||!data.items.length||data.items.length>5||new Set(data.items.map(i=>i.id)).size!==data.items.length)throw Error('본인 신청은 한 번에 1~5명을 선택해 주세요.');
       await runTransaction(db,async transaction=>{
         const snapshots=[];for(const item of data.items)snapshots.push(await transaction.get(copyRef(key,String(item.id))));
-        for(let i=0;i<snapshots.length;i++){const s=snapshots[i];if(!s.exists()||s.data().version!==data.items[i].version)throw Error('신청이 변경되었거나 삭제되었습니다. 새로고침해 주세요.');if(!editable(s.data()))throw Error('발주처 전달 전인 승인 대기 신청만 삭제할 수 있습니다.');}
+        for(let i=0;i<snapshots.length;i++){const s=snapshots[i];if(!s.exists()||s.data().version!==data.items[i].version)throw Error('신청이 변경되었거나 삭제되었습니다. 새로고침해 주세요.');if(!editable(s.data()))throw Error('발주처 전달 전인 승인 대기 신청만 삭제할 수 있습니다.');if(actor!==s.data().author_name)throw Error('최초 작성자 이름과 일치해야 수정·삭제할 수 있습니다.');}
         snapshots.forEach(s=>erase(transaction,doc(db,'requests',s.id),s.data(),actor));
       });return {count:data.items.length};
     }

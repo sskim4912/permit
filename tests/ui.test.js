@@ -102,14 +102,18 @@ test('one author is required per submission and is saved with every visitor',asy
   d.querySelector('#authorName').value='최초 작성 담당';await submit();assert.equal(calls[0].data.author_name,'최초 작성 담당');assert.equal(calls[0].data.items.length,2);
  }finally{dom.window.close();}
 });
-test('applicant edits only owned pending rows, records modifier and confirms deletion',async()=>{
+test('applicant must match original author to open, save or delete; a changed name is rechecked',async()=>{
  const {dom,w,d,submit,calls,enter,records}=await setup({own:true});try{
   assert.equal(d.querySelector('#mail').hidden,true);assert.equal(d.querySelector('#approve').hidden,true);assert.equal(d.querySelector('#adminSettings').hidden,true);
-  assert.equal(d.querySelectorAll('[data-edit]').length,1);assert.equal(d.querySelectorAll('[data-select]').length,1);assert.ok(!d.querySelector('#list').textContent.includes('예시방문자'));
-  d.querySelector('[data-edit]').click();assert.ok(d.querySelector('#list #requestForm'));assert.equal(d.querySelector('#authorLine').hidden,true);
-  enter('purpose','본인 수정');await submit();assert.equal(d.activeElement.id,'reviewer');assert.equal(calls.length,0);
-  d.querySelector('#reviewer').value='다른 수정 담당';await submit();assert.equal(calls[0].path,'owner-update');assert.equal(records()[0].author_name,'최초 작성자');assert.match(d.querySelector('#list').textContent,/다른 수정 담당/);
-  d.querySelector('[data-select]').click();w.confirm=()=>false;await d.querySelector('#delete').onclick();assert.equal(calls.length,1);w.confirm=()=>true;await d.querySelector('#delete').onclick();assert.equal(calls[1].path,'owner-delete');assert.equal(d.querySelector('[data-record="one"]'),null);
+  assert.equal(d.querySelectorAll('[data-edit]').length,1);assert.equal(d.querySelectorAll('[data-select]').length,1);
+  d.querySelector('[data-edit]').click();assert.equal(d.querySelector('#list #requestForm'),null);assert.equal(d.activeElement.id,'reviewer');
+  d.querySelector('#reviewer').value='다른 이름';d.querySelector('[data-edit]').click();assert.equal(d.querySelector('#list #requestForm'),null);assert.match(d.querySelector('#adminError').textContent,/최초 작성자/);
+  let confirmations=0;w.confirm=()=>{confirmations++;return true;};await d.querySelector('#list').onclick({target:d.querySelector('[data-delete]')});assert.equal(confirmations,0);assert.equal(calls.length,0);
+  d.querySelector('#reviewer').value='최초 작성자';d.querySelector('[data-edit]').click();assert.ok(d.querySelector('#list #requestForm'));enter('purpose','본인 수정');
+  d.querySelector('#reviewer').value='바뀐 이름';await submit();assert.equal(calls.length,0);assert.equal(d.activeElement.id,'reviewer');assert.match(d.querySelector('#formError').textContent,/일치/);
+  d.querySelector('#reviewer').value='  최초 작성자  ';await submit();assert.equal(calls[0].path,'owner-update');assert.equal(calls[0].data.reviewer,'최초 작성자');assert.equal(records()[0].author_name,'최초 작성자');
+  d.querySelector('[data-select]').click();d.querySelector('#reviewer').value='다른 이름';await d.querySelector('#delete').onclick();assert.equal(calls.length,1);assert.equal(confirmations,0);
+  d.querySelector('#reviewer').value='최초 작성자';w.confirm=()=>false;await d.querySelector('#delete').onclick();assert.equal(calls.length,1);w.confirm=()=>true;await d.querySelector('#delete').onclick();assert.equal(calls[1].path,'owner-delete');assert.equal(d.querySelector('[data-record="one"]'),null);
  }finally{dom.window.close();}
 });
 test('delivered and approved own applications remain visible but cannot be selected or edited',async()=>{
@@ -124,7 +128,7 @@ test('row deletion requires actor and confirmation; lookup is labelled and prese
   const clickDelete=()=>d.querySelector('#list').onclick({target:d.querySelector('[data-delete="one"]')});
   await clickDelete();assert.equal(d.activeElement.id,'reviewer');assert.equal(calls.length,0);
   d.querySelector('#search').value='최초 작성자';await d.querySelector('#refresh').onclick();assert.equal(d.querySelectorAll('[data-record]').length,1);assert.equal(d.querySelector('#search').value,'최초 작성자');
-  d.querySelector('#reviewer').value='삭제 담당';w.confirm=()=>false;await clickDelete();assert.equal(calls.length,0);w.confirm=()=>true;await clickDelete();assert.equal(calls[0].path,'owner-delete');assert.equal(calls[0].data.items.length,1);assert.equal(records().some(r=>r.id==='one'),false);assert.equal(records().length,2);
+  d.querySelector('#reviewer').value='최초 작성자';w.confirm=()=>false;await clickDelete();assert.equal(calls.length,0);w.confirm=()=>true;await clickDelete();assert.equal(calls[0].path,'owner-delete');assert.equal(calls[0].data.items.length,1);assert.equal(records().some(r=>r.id==='one'),false);assert.equal(records().length,2);
  }finally{dom.window.close();}
 });
 test('unowned requests show disabled edit/delete actions without ownership escalation',async()=>{

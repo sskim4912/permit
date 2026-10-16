@@ -36,11 +36,11 @@ service cloud.firestore {
     function ownerChange(before, after) {
       return ('owner_key' in before) && pending(before) && after.owner_key == before.owner_key
         && after.diff(before).affectedKeys().hasOnly(['visit_date','visit_end_date','purpose','team','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','version','modified_by','modified_at'])
-        && after.modified_at == request.time;
+        && after.modified_by == before.author_name && after.modified_at == request.time;
     }
     function deletedLog(id, before) {
       let log = getAfter(/databases/$(database)/documents/requestDeletions/$(id)).data;
-      return log.owner_key == before.owner_key && log.version == before.version && log.deleted_at == request.time;
+      return log.owner_key == before.owner_key && log.version == before.version && log.actor_name == before.author_name && log.deleted_at == request.time;
     }
     match /requests/{id} {
       allow read: if isAdmin();
@@ -87,6 +87,7 @@ service cloud.firestore {
         && (isAdmin() || (request.resource.data.owner_key == get(/databases/$(database)/documents/requests/$(id)).data.owner_key
           && request.resource.data.version == get(/databases/$(database)/documents/requests/$(id)).data.version
           && request.resource.data.author_name == get(/databases/$(database)/documents/requests/$(id)).data.author_name
+          && request.resource.data.actor_name == get(/databases/$(database)/documents/requests/$(id)).data.author_name
           && pending(get(/databases/$(database)/documents/requests/$(id)).data)
           && !existsAfter(/databases/$(database)/documents/requests/$(id))));
     }
