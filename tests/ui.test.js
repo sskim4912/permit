@@ -67,7 +67,7 @@ test('administrator deletion requires confirmation and clears selected rows',asy
 test('inline editor retains unsaved edits across refresh and cancellation restores applicant draft',async()=>{
  const {dom,w,d,login,enter,calls,submit}=await setup();try{enter('name','작성중 방문자');await tick();await login();d.querySelector('[data-edit="one"]').click();assert.ok(d.querySelector('#list #requestForm'));assert.equal(d.querySelector('#formHome #requestForm'),null);enter('purpose','수정된 회의');await d.querySelector('#refresh').onclick();assert.equal(d.querySelector('[name="purpose"]').value,'수정된 회의');assert.equal(d.querySelectorAll('.inline-editor-row').length,1);d.querySelector('#cancelEdit').click();assert.equal(d.querySelector('[name="name"]').value,'작성중 방문자');d.querySelector('[data-edit="one"]').click();d.querySelector('#reviewer').value='담당자';enter('purpose','최종 수정');await submit();assert.equal(calls[0].path,'update');assert.equal(calls[0].data.purpose,'최종 수정');assert.equal(d.querySelectorAll('.inline-editor-row').length,0);assert.equal(JSON.parse(w.sessionStorage.getItem('permit-draft'))[0].name,'작성중 방문자');}finally{dom.window.close();}
 });
-test('CSV is admin-only and preserves phone text while escaping formulas; logout clears private UI',async()=>{
+test('admin CSV preserves phone text while escaping formulas; logout clears private UI',async()=>{
  const {dom,d,login,getBlob}=await setup();try{await login();await d.querySelector('#download').onclick();const csv=await getBlob().text();assert.match(csv,/010-0000-0000/);assert.ok(csv.includes("'=formula"));assert.match(csv,/기존 상태값/);d.querySelector('[data-select="one"]').click();await d.querySelector('#login').onclick();assert.equal(d.querySelector('#adminControls').hidden,true);assert.ok(!d.querySelector('#list').textContent.includes('가상방문자'));assert.equal(d.querySelector('#mailBody').value,'');assert.equal(d.querySelectorAll('[data-select]').length,0);}finally{dom.window.close();}
 });
 test('status and search filters clear selections and map legacy statuses without rewriting data',async()=>{
@@ -154,5 +154,22 @@ test('site map toggles independently of applicant draft, list refresh and admini
   d.querySelector('#siteMapClose').click();assert.equal(panel.hidden,true);assert.equal(button.getAttribute('aria-expanded'),'false');assert.equal(d.activeElement,button);
   button.click();assert.equal(panel.hidden,false);assert.equal(d.querySelector('[name="name"]').value,'작성 중 방문자');
   d.querySelector('#siteMapClose').focus();d.querySelector('#siteMapClose').click();assert.equal(panel.hidden,true);
+ }finally{dom.window.close();}
+});
+
+ test('applicant CSV exports only browser-owned rows and respects active filters',async()=>{
+ const {dom,d,getBlob,change}=await setup({own:true});try{
+  assert.equal(d.querySelector('#applicantDownload').hidden,false);
+  assert.equal(d.querySelector('#adminSettings').hidden,true);
+  await d.querySelector('#downloadOwn').onclick();
+  const csv=await getBlob().text();assert.match(csv,/가상방문자/);assert.ok(!csv.includes('예시방문자'));assert.ok(!csv.includes('테스트방문자'));assert.ok(csv.includes("'=formula"));
+  change('statusFilter','승인 완료');await d.querySelector('#downloadOwn').onclick();assert.match(d.querySelector('#toast').textContent,/다운로드할 내역이 없습니다/);
+ }finally{dom.window.close();}
+});
+test('anonymous user without owned rows cannot export public rows as applicant CSV',async()=>{
+ const {dom,d,getBlob}=await setup();try{
+  assert.equal(d.querySelector('#applicantDownload').hidden,true);
+  await d.querySelector('#downloadOwn').onclick();assert.equal(getBlob(),undefined);
+  await d.querySelector('#download').onclick();assert.equal(getBlob(),undefined);
  }finally{dom.window.close();}
 });
