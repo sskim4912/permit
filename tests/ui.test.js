@@ -134,3 +134,22 @@ test('row deletion requires actor and confirmation; lookup is labelled and prese
 test('unowned requests show disabled edit/delete actions without ownership escalation',async()=>{
  const {dom,d}=await setup();try{assert.equal(d.querySelector('#manageHead').hidden,false);assert.equal(d.querySelectorAll('.row-actions button:disabled').length,6);assert.equal(d.querySelectorAll('[data-edit],[data-delete]').length,0);assert.equal(d.querySelector('#ownerHelp').hidden,false);assert.match(d.querySelector('#ownerHelp').textContent,/이전 신청/);}finally{dom.window.close();}
 });
+
+test('site map toggles independently of applicant draft, list refresh and administrator mode',async()=>{
+ const {dom,d,enter,login}=await setup();try{
+  const button=d.querySelector('#siteMapToggle'),panel=d.querySelector('#siteMapPanel'),image=d.querySelector('#siteMapImage');
+  assert.equal(d.querySelector('.gate-maps').firstElementChild,button);
+  assert.equal(d.querySelectorAll('.gate-maps a[target="_blank"]').length,2);
+  assert.equal(panel.hidden,true);assert.equal(image.getAttribute('src'),null);
+  enter('name','작성 중 방문자');button.click();
+  assert.equal(panel.hidden,false);assert.equal(button.getAttribute('aria-expanded'),'true');
+  assert.equal(image.getAttribute('src'),'/site-location-map.png');
+  await d.querySelector('#refresh').onclick();
+  assert.equal(panel.hidden,false);assert.equal(d.querySelector('[name="name"]').value,'작성 중 방문자');
+  button.click();assert.equal(panel.hidden,true);assert.equal(button.getAttribute('aria-expanded'),'false');
+  await login();button.click();assert.equal(panel.hidden,false);
+  image.dispatchEvent(new dom.window.Event('error'));assert.equal(d.querySelector('#siteMapError').hidden,false);
+  button.click();button.click();assert.equal(d.querySelector('#siteMapError').hidden,true);
+  image.dispatchEvent(new dom.window.Event('load'));assert.equal(image.hidden,false);
+ }finally{dom.window.close();}
+});

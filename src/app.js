@@ -83,4 +83,13 @@ $('recordMail').onclick=()=>{if(!admin||!mailItems.length)return;if(confirm('메
 $('settingsForm').onsubmit=async event=>{event.preventDefault();try{recipient=(await api('settings',{recipient:$('recipient').value})).recipient;$('settingsMessage').textContent='수신 주소를 저장했습니다.';}catch(e){$('settingsMessage').textContent=e.message;}};
 function csvCell(value){let text=String(value??'');if(/^\s*[=+@-]/.test(text)||/^[\t\r\n]/.test(text))text="'"+text;return '"'+text.replaceAll('"','""')+'"';}
 $('download').onclick=async()=>{if(!admin)return;try{if(!(await api('session')).reviewer)throw Error('다시 관리자 로그인해 주세요.');const source=await api('requests');const data=source.filter(matchesFilters);if(!data.length){toast('다운로드할 내역이 없습니다.');return;}const columns=[['id','번호'],...fields.map(([key,label])=>[key,label]),['display_status','진행 상태'],['status','기존 상태값'],['delivery_at','발주처 전달시각'],['author_name','최초 작성자'],['modified_by','최근 수정자'],['modified_at','최근 수정시각'],['reviewer','처리자'],['created','등록시각']];const csv='\uFEFF'+[columns.map(([,label])=>csvCell(label)).join(','),...data.map(row=>columns.map(([key])=>csvCell(key==='display_status'?statusLabel(row):key==='visit_end_date'?endDate(row):row[key])).join(','))].join('\r\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const link=document.createElement('a');link.href=url;link.download='출입신청_'+($('dateFilter').value||'전체')+'.csv';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){$('adminError').textContent=e.message;}};
+$('siteMapToggle').onclick=()=>{
+ const panel=$('siteMapPanel'),image=$('siteMapImage'),open=panel.hidden;
+ panel.hidden=!open;$('siteMapToggle').setAttribute('aria-expanded',String(open));
+ if(open&&(!image.getAttribute('src')||!$('siteMapError').hidden)){
+  $('siteMapError').hidden=true;image.hidden=false;image.src=image.dataset.src;
+ }
+};
+$('siteMapImage').onerror=()=>{$('siteMapImage').hidden=true;$('siteMapError').hidden=false;};
+$('siteMapImage').onload=()=>{$('siteMapImage').hidden=false;$('siteMapError').hidden=true;};
 restoreDraft();render();refresh();setInterval(refresh,30000);

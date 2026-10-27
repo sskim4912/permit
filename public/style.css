@@ -60,3 +60,10 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
 
 .heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}.heading .gate-maps{margin-left:auto;flex-shrink:0}.heading h1{min-width:0;margin:0}@media(max-width:720px){.heading{flex-direction:column;align-items:stretch;gap:14px}.heading .gate-maps{margin-left:0;width:100%}}
 @media(max-width:340px){.heading .gate-map>span{min-width:0;white-space:normal;word-break:keep-all;line-height:1.25;text-align:center}}
+
+/* Site location map disclosure; keep existing gate links in their original order. */
+.heading .gate-maps{grid-template-columns:repeat(3,184px)}
+#siteMapToggle[aria-expanded=true]{background:#dcecff;border-color:#8cb8e6}
+.site-map-panel h2{margin-bottom:16px}
+.site-map-panel img{display:block;width:100%;max-width:1100px;height:auto;margin:0 auto;border-radius:6px}
+@media(max-width:720px){.heading .gate-maps{grid-template-columns:repeat(2,minmax(0,1fr))}#siteMapToggle{grid-column:1/-1}.site-map-panel{padding:12px}}
