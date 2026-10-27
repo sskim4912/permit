@@ -67,3 +67,7 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
 .site-map-panel h2{margin-bottom:16px}
 .site-map-panel img{display:block;width:100%;max-width:1100px;height:auto;margin:0 auto;border-radius:6px}
 @media(max-width:720px){.heading .gate-maps{grid-template-columns:repeat(2,minmax(0,1fr))}#siteMapToggle{grid-column:1/-1}.site-map-panel{padding:12px}}
+
+.site-map-close{display:block;width:100%;padding:0;background:transparent;border:0;border-radius:6px}
+.site-map-close:focus-visible{outline:3px solid #95cab9;outline-offset:4px}
+.site-map-hint{text-align:center;font-size:13px;color:#62776c;margin:12px 0 0}

@@ -151,5 +151,8 @@ test('site map toggles independently of applicant draft, list refresh and admini
   image.dispatchEvent(new dom.window.Event('error'));assert.equal(d.querySelector('#siteMapError').hidden,false);
   button.click();button.click();assert.equal(d.querySelector('#siteMapError').hidden,true);
   image.dispatchEvent(new dom.window.Event('load'));assert.equal(image.hidden,false);
+  d.querySelector('#siteMapClose').click();assert.equal(panel.hidden,true);assert.equal(button.getAttribute('aria-expanded'),'false');assert.equal(d.activeElement,button);
+  button.click();assert.equal(panel.hidden,false);assert.equal(d.querySelector('[name="name"]').value,'작성 중 방문자');
+  d.querySelector('#siteMapClose').focus();d.querySelector('#siteMapClose').click();assert.equal(panel.hidden,true);
  }finally{dom.window.close();}
 });

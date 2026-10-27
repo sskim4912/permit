@@ -90,6 +90,7 @@ $('siteMapToggle').onclick=()=>{
   $('siteMapError').hidden=true;image.hidden=false;image.src=image.dataset.src;
  }
 };
+$('siteMapClose').onclick=()=>{$('siteMapPanel').hidden=true;$('siteMapToggle').setAttribute('aria-expanded','false');$('siteMapToggle').focus({preventScroll:true});};
 $('siteMapImage').onerror=()=>{$('siteMapImage').hidden=true;$('siteMapError').hidden=false;};
 $('siteMapImage').onload=()=>{$('siteMapImage').hidden=false;$('siteMapError').hidden=true;};
 restoreDraft();render();refresh();setInterval(refresh,30000);
