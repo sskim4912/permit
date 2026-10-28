@@ -2,6 +2,8 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {JSDOM} from 'jsdom';
+import ExcelJS from 'exceljs';
+import {createApplicantWorkbook} from '../src/xlsx-export.js';
 const tick=()=>new Promise(resolve=>setTimeout(resolve,5));
 const base={visit_date:'2026-10-15',purpose:'회의',team:'공무팀',gate:'서문',name:'가상방문자',birth:'1990-01-23',phone:'010-0000-0000',plate:'=formula',vehicle_type:'승용',vehicle_name:'캐스퍼',role:'운전자',shoes:'280',reviewer:'',version:1,created:'2026-10-15T00:00:00Z'};
 async function setup({draft=null,blocked=false,own=false}={}){
@@ -12,6 +14,7 @@ async function setup({draft=null,blocked=false,own=false}={}){
  let signed=false,recipient='test@example.com',blob;const calls=[];
  let records=[{...base,id:'one',status:'현장 제출',own,author_name:'최초 작성자'},{...base,id:'two',name:'예시방문자',status:'발주처 제출'},{...base,id:'three',name:'테스트방문자',status:'승인 완료'}];
  w.URL.createObjectURL=value=>{blob=value;return 'blob:test';};w.URL.revokeObjectURL=()=>{};w.HTMLAnchorElement.prototype.click=function(){};
+ w.loadApplicantExcel=()=>Promise.resolve({createApplicantWorkbook});
  w.createPermitAPI=()=>({api:async(path,data)=>{
   if(path==='session')return {reviewer:signed};
   if(path==='login'){if(data.password!=='test-password')throw Error('비밀번호가 맞지 않습니다.');signed=true;return {};}
@@ -30,7 +33,7 @@ async function setup({draft=null,blocked=false,own=false}={}){
   if(path==='bulk'){calls.push({path,data:structuredClone(data)});for(const item of data.items){const row=records.find(row=>row.id===item.id);if(!row||row.version!==item.version)throw Error('선택 내역이 변경되었습니다.');}
    for(const item of data.items){const row=records.find(row=>row.id===item.id);if(data.action==='delete')records=records.filter(row=>row.id!==item.id);else{row.version++;row.reviewer=data.reviewer;if(data.action==='approve')row.status='승인 완료';if(data.action==='delivered')row.delivery_at='2026-10-15T02:00:00Z';}}return {};}
  }});
- w.eval(readFileSync('src/app.js','utf8').replace("import {createPermitAPI} from './firebase-api.js';",''));await tick();d.querySelector('#authorName').value='테스트 작성자';
+ w.eval(readFileSync('src/app.js','utf8').replace("import {createPermitAPI} from './firebase-api.js';",'').replace("import('/xlsx-export.js')",'loadApplicantExcel()'));await tick();d.querySelector('#authorName').value='테스트 작성자';
  const enter=(key,value,index=0)=>{const input=d.querySelectorAll(`[name="${key}"]`)[index];input.value=value;input.dispatchEvent(new w.Event('input',{bubbles:true}));return input;};
  const login=async()=>{await d.querySelector('#login').onclick();d.querySelector('#password').value='test-password';await d.querySelector('#loginForm').onsubmit({preventDefault(){}});await tick();};
  const change=(id,value)=>{d.querySelector('#'+id).value=value;d.querySelector('#'+id).dispatchEvent(new w.Event('change',{bubbles:true}));};
@@ -172,4 +175,13 @@ test('anonymous user without owned rows cannot export public rows as applicant C
   await d.querySelector('#downloadOwn').onclick();assert.equal(getBlob(),undefined);
   await d.querySelector('#download').onclick();assert.equal(getBlob(),undefined);
  }finally{dom.window.close();}
+});
+
+test('applicant Excel contains only owned rows and denies downloads without ownership',async()=>{
+ const {dom,d,getBlob,change}=await setup({own:true});try{
+  await d.querySelector('#downloadOwnExcel').onclick();const book=new ExcelJS.Workbook();await book.xlsx.load(await getBlob().arrayBuffer());
+  const names=book.worksheets[0].getColumn(3).values;assert.ok(names.includes('가상방문자'));assert.ok(!names.includes('예시방문자'));assert.ok(!names.includes('테스트방문자'));
+  change('statusFilter','승인 완료');await d.querySelector('#downloadOwnExcel').onclick();assert.match(d.querySelector('#toast').textContent,/다운로드할 내역이 없습니다/);assert.equal(d.querySelector('#downloadOwnExcel').disabled,false);
+ }finally{dom.window.close();}
+ const other=await setup();try{await other.d.querySelector('#downloadOwnExcel').onclick();assert.equal(other.getBlob(),undefined);}finally{other.dom.window.close();}
 });

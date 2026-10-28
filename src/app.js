@@ -85,6 +85,18 @@ function csvCell(value){let text=String(value??'');if(/^\s*[=+@-]/.test(text)||/
 async function downloadCSV(ownOnly=false){if(!ownOnly&&!admin)return;const errorTarget=ownOnly?$('downloadOwnError'):$('adminError');errorTarget.textContent='';try{if(!ownOnly&&!(await api('session')).reviewer)throw Error('다시 관리자 로그인해 주세요.');const source=await api('requests');if(!ownOnly&&!admin)throw Error('다시 관리자 로그인해 주세요.');const data=source.filter(row=>(!ownOnly||row.own===true)&&matchesFilters(row));if(!data.length){toast('다운로드할 내역이 없습니다.');return;}const columns=[['id','번호'],...fields.map(([key,label])=>[key,label]),['display_status','진행 상태'],['status','기존 상태값'],['delivery_at','발주처 전달시각'],['author_name','최초 작성자'],['modified_by','최근 수정자'],['modified_at','최근 수정시각'],['reviewer','처리자'],['created','등록시각']];const csv='\uFEFF'+[columns.map(([,label])=>csvCell(label)).join(','),...data.map(row=>columns.map(([key])=>csvCell(key==='display_status'?statusLabel(row):key==='visit_end_date'?endDate(row):row[key])).join(','))].join('\r\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const link=document.createElement('a');link.href=url;link.download=(ownOnly?'본인_출입신청_':'출입신청_')+($('dateFilter').value||'전체')+'.csv';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){errorTarget.textContent=e.message;}}
 $('download').onclick=()=>downloadCSV();
 $('downloadOwn').onclick=()=>downloadCSV(true);
+$('downloadOwnExcel').onclick=async()=>{
+ const button=$('downloadOwnExcel');if(button.disabled)return;
+ button.disabled=true;$('downloadOwnError').textContent='';
+ try{
+  const source=await api('requests');const data=source.filter(row=>row.own===true&&matchesFilters(row));
+  if(!data.length){toast('다운로드할 내역이 없습니다.');return;}
+  const {createApplicantWorkbook}=await import('/xlsx-export.js');
+  const buffer=await createApplicantWorkbook(data);
+  const url=URL.createObjectURL(new Blob([buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  const link=document.createElement('a');link.href=url;link.download='본인_출입신청_'+($('dateFilter').value||'전체')+'.xlsx';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ }catch(e){$('downloadOwnError').textContent='엑셀 파일을 만들지 못했습니다. '+e.message;}finally{button.disabled=false;}
+};
 $('siteMapToggle').onclick=()=>{
  const panel=$('siteMapPanel'),image=$('siteMapImage'),open=panel.hidden;
  panel.hidden=!open;$('siteMapToggle').setAttribute('aria-expanded',String(open));
