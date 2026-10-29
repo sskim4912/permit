@@ -28,3 +28,13 @@ test('detailed workbook matches all 22 columns, styling and Korean timestamps wi
  assert.equal(sheet.getCell('V1').fill.fgColor.argb,'FFD0D0D0');assert.equal(sheet.getCell('V6').border.bottom.style,'thin');assert.equal(sheet.getCell('I2').alignment.horizontal,'center');assert.equal(sheet.getCell('I2').alignment.vertical,'middle');
  assert.equal(sheet.getCell('I2').numFmt,'@');assert.equal(sheet.autoFilter,'A1:V2');
 });
+
+test('both workbooks print landscape on one sheet for small lists and paginate long lists vertically',async()=>{
+ const {createDetailedWorkbook}=await import('../src/xlsx-export.js');
+ for(const [exporter,lastColumn] of [[createApplicantWorkbook,'I'],[createDetailedWorkbook,'V']]){
+  for(const count of [3,80]){
+   const book=new ExcelJS.Workbook();await book.xlsx.load(await exporter(Array.from({length:count},()=>({visit_date:'2026-10-30',name:'가상 방문자'}))));const sheet=book.worksheets[0];
+   assert.equal(sheet.pageSetup.orientation,'landscape');assert.equal(sheet.pageSetup.fitToPage,true);assert.equal(sheet.pageSetup.fitToWidth,1);assert.equal(sheet.pageSetup.fitToHeight,count<=15?1:0);assert.equal(sheet.pageSetup.printTitlesRow,'1:1');assert.equal(sheet.pageSetup.printArea,'A1:'+lastColumn+Math.max(6,count+1));assert.equal(sheet.headerFooter.oddFooter,'&C&P / &N');
+  }
+ }
+});

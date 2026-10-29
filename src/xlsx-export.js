@@ -19,6 +19,7 @@ export async function createApplicantWorkbook(rows) {
    if(row.number>1&&col>1)cell.numFmt='@';
   }
  });
+ configurePrint(sheet,9,rows.length);
  return workbook.xlsx.writeBuffer();
 }
 
@@ -36,5 +37,11 @@ export async function createDetailedWorkbook(rows) {
   if(row.number===1)cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFD0D0D0'}};else if(col>1)cell.numFmt='@';
  }});
  sheet.autoFilter={from:'A1',to:'V'+Math.max(2,rows.length+1)};
+ configurePrint(sheet,22,rows.length);
  return book.xlsx.writeBuffer();
+}
+
+function configurePrint(sheet,columnCount,peopleCount){
+ sheet.pageSetup={...sheet.pageSetup,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:peopleCount<=15?1:0,printTitlesRow:'1:1',horizontalCentered:true,printArea:'A1:'+sheet.getColumn(columnCount).letter+sheet.rowCount,margins:{left:0.25,right:0.25,top:0.3,bottom:0.3,header:0.15,footer:0.15}};
+ sheet.headerFooter.oddFooter='&C&P / &N';
 }
