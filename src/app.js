@@ -48,7 +48,11 @@ const endDate=row=>row.visit_end_date??row.visit_date;
 const visitPeriod=row=>row.visit_date===endDate(row)?row.visit_date:row.visit_date+' ~ '+endDate(row);
 let weekOffset=0,allWeeks=false;
 function weekRange(){const d=new Date(today+'T12:00:00Z');d.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7)+weekOffset*7);const start=d.toISOString().slice(0,10);d.setUTCDate(d.getUTCDate()+6);return [start,d.toISOString().slice(0,10)];}
-function renderWeek(){const [start,end]=weekRange();$('weekLabel').textContent=allWeeks?'전체 기간':start+' ~ '+end;}
+function renderWeek(){
+ const [start,end]=weekRange();$('weekLabel').textContent=allWeeks?'기간 제한 없음':start+' ~ '+end;
+ const active=allWeeks?'weekAll':weekOffset===0?'weekCurrent':weekOffset<0?'weekPrev':'weekNext';
+ for(const id of ['weekPrev','weekCurrent','weekNext','weekAll']){$(id).classList.toggle('is-active',id===active);$(id).setAttribute('aria-pressed',String(id===active));}
+}
 function setWeekFor(value){const monday=value=>{const d=new Date(value+'T12:00:00Z');d.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7));return d.getTime();};weekOffset=Math.round((monday(value)-monday(today))/604800000);allWeeks=false;}
 function matchesFilters(row){const [start,end]=weekRange();return (allWeeks||(row.visit_date<=end&&endDate(row)>=start))&&(!$('statusFilter').value||statusLabel(row)===$('statusFilter').value)&&(!$('dateFilter').value||(row.visit_date<=$('dateFilter').value&&endDate(row)>=$('dateFilter').value))&&[row.name||'',row.team,row.purpose,row.author_name||'',row.plate||''].some(value=>value.toLowerCase().includes($('search').value.toLowerCase()));}
 function visibleRows(){return rows.filter(matchesFilters).sort((a,b)=>b.visit_date.localeCompare(a.visit_date)||b.created.localeCompare(a.created));}

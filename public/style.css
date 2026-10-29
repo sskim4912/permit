@@ -119,3 +119,14 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
  .number-choice{gap:12px}.record-info summary{font-size:14px}.record-info .row-actions button{font-size:14px}
  .list-panel .list-note{font-size:12px}.table-wrap td[data-label="출입날짜"]{line-height:1.6}
 }
+
+/* Clearly grouped period controls, separated from the displayed date range. */
+.week-navigation{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 16px;margin:18px 0;background:#edf4f1;border:1px solid #d6e5dc;border-radius:10px}
+.week-buttons{display:flex;gap:8px;flex-wrap:wrap}
+.week-navigation .week-buttons button{min-height:44px;padding:10px 18px;border:1px solid #bdd4c7;border-radius:8px;background:#fff;color:#35604c;font-size:14px;white-space:nowrap}
+.week-navigation .week-buttons button:hover{background:#dceee4;border-color:#86b39a}
+.week-navigation .week-buttons button.is-active{background:#117b61;border-color:#117b61;color:#fff;box-shadow:0 2px 5px #15563b1a}
+.week-navigation .week-buttons button:focus-visible{outline:3px solid #91bfa9;outline-offset:3px}
+.week-range{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;color:#60796c}
+.week-range>span{font-size:12px;white-space:nowrap}.week-navigation .week-range strong{order:initial;width:auto;padding:0;font-size:15px;color:#284f3c;font-variant-numeric:tabular-nums;white-space:nowrap}
+@media(max-width:720px){.week-navigation{display:flex;flex-direction:column;align-items:stretch;gap:14px;padding:12px}.week-buttons{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.week-navigation .week-buttons button{font-size:13px;padding:10px 4px;min-height:46px}.week-range{justify-content:center;padding-top:10px;border-top:1px solid #d6e5dc}.week-navigation .week-range strong{font-size:13px}}
