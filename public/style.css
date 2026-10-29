@@ -71,3 +71,12 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
 .site-map-close{display:block;width:100%;padding:0;background:transparent;border:0;border-radius:6px}
 .site-map-close:focus-visible{outline:3px solid #95cab9;outline-offset:4px}
 .site-map-hint{text-align:center;font-size:13px;color:#62776c;margin:12px 0 0}
+
+/* Shared nine-column roster and weekly navigation. */
+.week-navigation{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:16px 0}
+.week-navigation strong{font-size:14px;color:#345c49;padding:0 8px}
+.number-cell>span{display:block}.number-cell input{margin:8px auto 0}
+.record-info{margin-top:6px;font-size:11px}.record-info summary{color:#3c718f;font-size:11px}.record-info>div{margin-top:8px;line-height:1.8}.record-info .row-actions{grid-template-columns:1fr 1fr;gap:4px}.record-info .row-actions button{padding:6px;min-width:0;font-size:11px}
+.table-wrap table{table-layout:fixed;text-align:center}.table-wrap th,.table-wrap td{border:1px solid #d5dfd8;overflow-wrap:anywhere}.table-wrap th{background:#e9eeeb;font-weight:600}.table-wrap th:first-child{width:6%}.table-wrap th:nth-child(2){width:17%}.table-wrap th:nth-child(5){width:15%}.table-wrap td{vertical-align:top}
+#adminSettings .settings-content>button{margin:0 8px 10px 0}
+@media(max-width:720px){.table-wrap table{text-align:left;table-layout:auto}.table-wrap td{border:0}.number-cell>span{display:inline}.number-cell input{display:inline-block;margin:0 0 0 14px}.week-navigation{gap:6px}.week-navigation button{font-size:12px;padding:9px}.week-navigation strong{order:-1;width:100%;padding:0 0 6px}.record-info .row-actions{max-width:200px}.table-wrap td:has(.record-info){grid-column:1/-1}}

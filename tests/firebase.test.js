@@ -149,3 +149,14 @@ test('admin saves multiple mail recipients with existing string schema and rules
  await assertFails(setDoc(doc(db,'settings','mail'),{recipient:Array.from({length:11},(_,i)=>`r${i}@example.com`).join(',')}));
  await api('settings',{recipient:'single@example.com'});assert.equal((await api('settings')).recipient,'single@example.com');await api('logout',{});
 });
+
+test('browser-owned batch deletion derives each original author without a second name entry',async()=>{
+ const client=createPermitAPI({config:{apiKey:'demo-key',projectId:project},emulator:true,name:'multi-author-delete',ownerKey:'c'.repeat(64)});
+ try{
+  await client.api('requests',{author_name:'신청자 하나',items:[{...item,name:'작성자별 삭제1'}]});await client.api('requests',{author_name:'신청자 둘',items:[{...item,name:'작성자별 삭제2'}]});
+  const mine=(await client.api('requests')).filter(r=>r.own);assert.equal(mine.length,2);
+  await client.api('owner-delete',{items:mine.map(({id,version})=>({id,version}))});
+  assert.equal((await client.api('requests')).filter(r=>r.own).length,0);
+  const db=env.authenticatedContext(ADMIN_UID).firestore();for(const row of mine){const log=(await getDoc(doc(db,'requestDeletions',row.id))).data();assert.equal(log.actor_name,row.author_name);}
+ }finally{await deleteApp(client.app);}
+});

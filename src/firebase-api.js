@@ -94,12 +94,12 @@ export function createPermitAPI({config=firebaseConfig, emulator=false, name='pe
       });return {};
     }
     if(path==='owner-delete'){
-      const key=browserKey();if(!key)throw Error('신청한 브라우저에서만 삭제할 수 있습니다.');const actor=personName(data.reviewer);
+      const key=browserKey();if(!key)throw Error('신청한 브라우저에서만 삭제할 수 있습니다.');const actor=data.reviewer?personName(data.reviewer):null;
       if(!Array.isArray(data.items)||!data.items.length||data.items.length>5||new Set(data.items.map(i=>i.id)).size!==data.items.length)throw Error('본인 신청은 한 번에 1~5명을 선택해 주세요.');
       await runTransaction(db,async transaction=>{
         const snapshots=[];for(const item of data.items)snapshots.push(await transaction.get(copyRef(key,String(item.id))));
-        for(let i=0;i<snapshots.length;i++){const s=snapshots[i];if(!s.exists()||s.data().version!==data.items[i].version)throw Error('신청이 변경되었거나 삭제되었습니다. 새로고침해 주세요.');if(!editable(s.data()))throw Error('발주처 전달 전인 승인 대기 신청만 삭제할 수 있습니다.');if(actor!==s.data().author_name)throw Error('최초 작성자 이름과 일치해야 수정·삭제할 수 있습니다.');}
-        snapshots.forEach(s=>erase(transaction,doc(db,'requests',s.id),s.data(),actor));
+        for(let i=0;i<snapshots.length;i++){const s=snapshots[i];if(!s.exists()||s.data().version!==data.items[i].version)throw Error('신청이 변경되었거나 삭제되었습니다. 새로고침해 주세요.');if(!editable(s.data()))throw Error('발주처 전달 전인 승인 대기 신청만 삭제할 수 있습니다.');if(actor&&actor!==s.data().author_name)throw Error('최초 작성자 이름과 일치해야 수정·삭제할 수 있습니다.');}
+        snapshots.forEach(s=>erase(transaction,doc(db,'requests',s.id),s.data(),s.data().author_name));
       });return {count:data.items.length};
     }
     if(path==='bulk'){

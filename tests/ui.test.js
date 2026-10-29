@@ -9,6 +9,7 @@ const tick=()=>new Promise(resolve=>setTimeout(resolve,5));
 const base={visit_date:'2026-10-15',purpose:'회의',team:'공무팀',gate:'서문',name:'가상방문자',birth:'1990-01-23',phone:'010-0000-0000',plate:'=formula',vehicle_type:'승용',vehicle_name:'캐스퍼',role:'운전자',shoes:'280',reviewer:'',version:1,created:'2026-10-15T00:00:00Z'};
 async function setup({draft=null,blocked=false,own=false}={}){
  const dom=new JSDOM(readFileSync('public/index.html','utf8'),{url:'https://permit.example',runScripts:'outside-only'}),w=dom.window,d=w.document;
+ const NativeDate=w.Date;w.Date=class extends NativeDate{constructor(...args){super(...(args.length?args:['2026-10-15T03:00:00Z']));}};
  w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};w.confirm=()=>true;w.setInterval=()=>0;
  const realTimer=w.setTimeout.bind(w);w.setTimeout=(fn,ms)=>ms===350?realTimer(fn,0):0;w.Blob=Blob;
  if(draft)w.sessionStorage.setItem('permit-draft',JSON.stringify(draft));if(blocked)Object.defineProperty(w,'sessionStorage',{get(){throw Error('blocked');}});
@@ -55,7 +56,7 @@ test('missing or invalid fields are shown above submit and focused',async()=>{
  const {dom,d,enter,submit,calls}=await setup();try{await submit();assert.equal(d.activeElement.name,'purpose');assert.match(d.querySelector('#formError').textContent,/방문목적/);assert.ok(d.querySelector('#formError').compareDocumentPosition(d.querySelector('.form-actions'))&4);enter('purpose','테스트');enter('team','팀');enter('name','가상방문자');enter('birth','19900230');enter('phone','01000000000');await submit();assert.equal(d.activeElement.name,'birth');enter('birth','19900123');enter('phone','01012');await submit();assert.equal(d.activeElement.name,'phone');assert.equal(calls.length,0);}finally{dom.window.close();}
 });
 test('per-person fields, vehicle selector and maximum ten visitors',async()=>{
- const {dom,d,enter,submit,calls}=await setup();try{enter('purpose','회의');enter('team','공무팀');enter('name','방문자1');enter('birth','19900123');enter('phone','01000000000');d.querySelector('#add').click();enter('purpose','점검',1);enter('team','안전팀',1);enter('name','방문자2',1);enter('birth','19800229',1);enter('phone','01000000001',1);enter('gate','정문',1);enter('visit_date','2026-10-16',1);assert.deepEqual([...d.querySelector('[name="vehicle_type"]').options].map(o=>o.value),['승용','승합']);await submit();assert.equal(calls[0].data.items[1].purpose,'점검');assert.equal(calls[0].data.items[1].gate,'정문');for(let i=0;i<12;i++)d.querySelector('#add').click();assert.equal(d.querySelectorAll('.person').length,10);}finally{dom.window.close();}
+ const {dom,d,enter,submit,calls}=await setup();try{enter('purpose','회의');enter('team','공무팀');enter('name','방문자1');enter('birth','19900123');enter('phone','01000000000');d.querySelector('#add').click();enter('purpose','점검',1);enter('team','안전팀',1);enter('name','방문자2',1);enter('birth','19800229',1);enter('phone','01000000001',1);enter('gate','정문',1);enter('visit_date','2026-10-16',1);enter('visit_end_date','2026-10-16',1);assert.deepEqual([...d.querySelector('[name="vehicle_type"]').options].map(o=>o.value),['승용','승합']);await submit();assert.equal(calls[0].data.items[1].purpose,'점검');assert.equal(calls[0].data.items[1].gate,'정문');for(let i=0;i<12;i++)d.querySelector('#add').click();assert.equal(d.querySelectorAll('.person').length,10);}finally{dom.window.close();}
 });
 test('blocked storage reports failure without discarding typed input',async()=>{
  const {dom,d,enter}=await setup({blocked:true});try{enter('name','보존할 내용');await tick();assert.equal(d.querySelector('[name="name"]').value,'보존할 내용');assert.match(d.querySelector('#draftStatus').textContent,/자동 임시저장 불가/);}finally{dom.window.close();}
@@ -107,18 +108,11 @@ test('one author is required per submission and is saved with every visitor',asy
   d.querySelector('#authorName').value='최초 작성 담당';await submit();assert.equal(calls[0].data.author_name,'최초 작성 담당');assert.equal(calls[0].data.items.length,2);
  }finally{dom.window.close();}
 });
-test('applicant must match original author to open, save or delete; a changed name is rechecked',async()=>{
+test('applicant edit and confirmed deletion reuse stored author without processor input',async()=>{
  const {dom,w,d,submit,calls,enter,records}=await setup({own:true});try{
-  assert.equal(d.querySelector('#mail').hidden,true);assert.equal(d.querySelector('#approve').hidden,true);assert.equal(d.querySelector('#adminSettings').hidden,true);
-  assert.equal(d.querySelectorAll('[data-edit]').length,1);assert.equal(d.querySelectorAll('[data-select]').length,1);
-  d.querySelector('[data-edit]').click();assert.equal(d.querySelector('#list #requestForm'),null);assert.equal(d.activeElement.id,'reviewer');
-  d.querySelector('#reviewer').value='다른 이름';d.querySelector('[data-edit]').click();assert.equal(d.querySelector('#list #requestForm'),null);assert.match(d.querySelector('#adminError').textContent,/최초 작성자/);
-  let confirmations=0;w.confirm=()=>{confirmations++;return true;};await d.querySelector('#list').onclick({target:d.querySelector('[data-delete]')});assert.equal(confirmations,0);assert.equal(calls.length,0);
-  d.querySelector('#reviewer').value='최초 작성자';d.querySelector('[data-edit]').click();assert.ok(d.querySelector('#list #requestForm'));enter('purpose','본인 수정');
-  d.querySelector('#reviewer').value='바뀐 이름';await submit();assert.equal(calls.length,0);assert.equal(d.activeElement.id,'reviewer');assert.match(d.querySelector('#formError').textContent,/일치/);
-  d.querySelector('#reviewer').value='  최초 작성자  ';await submit();assert.equal(calls[0].path,'owner-update');assert.equal(calls[0].data.reviewer,'최초 작성자');assert.equal(records()[0].author_name,'최초 작성자');
-  d.querySelector('[data-select]').click();d.querySelector('#reviewer').value='다른 이름';await d.querySelector('#delete').onclick();assert.equal(calls.length,1);assert.equal(confirmations,0);
-  d.querySelector('#reviewer').value='최초 작성자';w.confirm=()=>false;await d.querySelector('#delete').onclick();assert.equal(calls.length,1);w.confirm=()=>true;await d.querySelector('#delete').onclick();assert.equal(calls[1].path,'owner-delete');assert.equal(d.querySelector('[data-record="one"]'),null);
+  assert.equal(d.querySelector('#mail').hidden,true);assert.equal(d.querySelector('#adminActor').hidden,true);
+  d.querySelector('[data-edit]').click();assert.ok(d.querySelector('#list #requestForm'));enter('purpose','본인 수정');await submit();assert.equal(calls[0].data.reviewer,'최초 작성자');assert.equal(records()[0].author_name,'최초 작성자');
+  d.querySelector('[data-select]').click();w.confirm=()=>false;await d.querySelector('#delete').onclick();assert.equal(calls.length,1);w.confirm=()=>true;await d.querySelector('#delete').onclick();assert.equal(calls[1].path,'owner-delete');assert.equal(d.querySelector('[data-record="one"]'),null);
  }finally{dom.window.close();}
 });
 test('delivered and approved own applications remain visible but cannot be selected or edited',async()=>{
@@ -127,17 +121,14 @@ test('delivered and approved own applications remain visible but cannot be selec
  }finally{dom.window.close();}
 });
 
-test('row deletion requires actor and confirmation; lookup is labelled and preserves author search',async()=>{
+test('row deletion requires confirmation while author search remains available',async()=>{
  const {dom,w,d,calls,records}=await setup({own:true});try{
-  assert.equal(d.querySelector('#refresh').textContent,'조회');assert.equal(d.querySelectorAll('[data-delete]').length,1);
-  const clickDelete=()=>d.querySelector('#list').onclick({target:d.querySelector('[data-delete="one"]')});
-  await clickDelete();assert.equal(d.activeElement.id,'reviewer');assert.equal(calls.length,0);
-  d.querySelector('#search').value='최초 작성자';await d.querySelector('#refresh').onclick();assert.equal(d.querySelectorAll('[data-record]').length,1);assert.equal(d.querySelector('#search').value,'최초 작성자');
-  d.querySelector('#reviewer').value='최초 작성자';w.confirm=()=>false;await clickDelete();assert.equal(calls.length,0);w.confirm=()=>true;await clickDelete();assert.equal(calls[0].path,'owner-delete');assert.equal(calls[0].data.items.length,1);assert.equal(records().some(r=>r.id==='one'),false);assert.equal(records().length,2);
+  d.querySelector('#search').value='최초 작성자';await d.querySelector('#refresh').onclick();assert.equal(d.querySelectorAll('[data-record]').length,1);
+  const click=()=>d.querySelector('#list').onclick({target:d.querySelector('[data-delete="one"]')});w.confirm=()=>false;await click();assert.equal(calls.length,0);w.confirm=()=>true;await click();assert.equal(calls[0].path,'owner-delete');assert.equal(records().length,2);
  }finally{dom.window.close();}
 });
-test('unowned requests show disabled edit/delete actions without ownership escalation',async()=>{
- const {dom,d}=await setup();try{assert.equal(d.querySelector('#manageHead').hidden,false);assert.equal(d.querySelectorAll('.row-actions button:disabled').length,6);assert.equal(d.querySelectorAll('[data-edit],[data-delete]').length,0);assert.equal(d.querySelector('#ownerHelp').hidden,false);assert.match(d.querySelector('#ownerHelp').textContent,/이전 신청/);}finally{dom.window.close();}
+test('unowned requests cannot expose edit/delete actions or personal information',async()=>{
+ const {dom,d}=await setup();try{assert.equal(d.querySelectorAll('thead th').length,9);assert.equal(d.querySelectorAll('[data-edit],[data-delete]').length,0);assert.equal(d.querySelector('#ownerHelp').hidden,false);assert.match(d.querySelector('#ownerHelp').textContent,/이전 신청/);}finally{dom.window.close();}
 });
 
 test('site map toggles independently of applicant draft, list refresh and administrator mode',async()=>{
@@ -162,13 +153,11 @@ test('site map toggles independently of applicant draft, list refresh and admini
  }finally{dom.window.close();}
 });
 
- test('applicant CSV exports only browser-owned rows and respects active filters',async()=>{
- const {dom,d,getBlob,change}=await setup({own:true});try{
-  assert.equal(d.querySelector('#applicantDownload').hidden,false);
-  assert.equal(d.querySelector('#adminSettings').hidden,true);
-  await d.querySelector('#downloadOwn').onclick();
-  const csv=await getBlob().text();assert.match(csv,/가상방문자/);assert.ok(!csv.includes('예시방문자'));assert.ok(!csv.includes('테스트방문자'));assert.ok(csv.includes("'=formula"));
-  change('statusFilter','승인 완료');await d.querySelector('#downloadOwn').onclick();assert.match(d.querySelector('#toast').textContent,/다운로드할 내역이 없습니다/);
+ test('download controls and handlers are administrator-only',async()=>{
+ const {dom,d,getBlob,login}=await setup({own:true});try{
+  assert.equal(d.querySelector('#applicantDownload').hidden,true);assert.equal(d.querySelector('#adminSettings').hidden,true);
+  await d.querySelector('#downloadOwn').onclick();await d.querySelector('#downloadOwnExcel').onclick();await d.querySelector('#downloadExcel').onclick();await d.querySelector('#download').onclick();assert.equal(getBlob(),undefined);
+  await login();assert.equal(d.querySelector('#adminSettings').hidden,false);await d.querySelector('#downloadExcel').onclick();const book=new ExcelJS.Workbook();await book.xlsx.load(await getBlob().arrayBuffer());assert.ok(book.worksheets[0].getColumn(3).values.includes('예시방문자'));
  }finally{dom.window.close();}
 });
 test('anonymous user without owned rows cannot export public rows as applicant CSV',async()=>{
@@ -179,19 +168,9 @@ test('anonymous user without owned rows cannot export public rows as applicant C
  }finally{dom.window.close();}
 });
 
-test('applicant Excel contains only owned rows and denies downloads without ownership',async()=>{
- const {dom,d,getBlob,change}=await setup({own:true});try{
-  await d.querySelector('#downloadOwnExcel').onclick();const book=new ExcelJS.Workbook();await book.xlsx.load(await getBlob().arrayBuffer());
-  const names=book.worksheets[0].getColumn(3).values;assert.ok(names.includes('가상방문자'));assert.ok(!names.includes('예시방문자'));assert.ok(!names.includes('테스트방문자'));
-  change('statusFilter','승인 완료');await d.querySelector('#downloadOwnExcel').onclick();assert.match(d.querySelector('#toast').textContent,/다운로드할 내역이 없습니다/);assert.equal(d.querySelector('#downloadOwnExcel').disabled,false);
- }finally{dom.window.close();}
- const other=await setup();try{await other.d.querySelector('#downloadOwnExcel').onclick();assert.equal(other.getBlob(),undefined);}finally{other.dom.window.close();}
-});
-
-test('clicking applicant edit without actor visibly explains why editor did not open',async()=>{
- const {dom,d}=await setup({own:true});try{
-  d.querySelector('[data-edit="one"]').click();assert.equal(d.querySelector('#cancelEdit').hidden,true);assert.match(d.querySelector('#toast').textContent,/최초 작성자 이름/);assert.equal(d.activeElement.id,'reviewer');
-  d.querySelector('#reviewer').value='최초 작성자';d.querySelector('[data-edit="one"]').click();assert.equal(d.querySelector('#cancelEdit').hidden,false);
+test('applicant edits without entering processor name and retains original author',async()=>{
+ const {dom,d,enter,submit,calls}=await setup({own:true});try{
+  assert.equal(d.querySelector('#adminActor').hidden,true);d.querySelector('[data-edit="one"]').click();assert.equal(d.querySelector('#cancelEdit').hidden,false);enter('name','김진동');await submit();assert.equal(calls[0].data.reviewer,'최초 작성자');assert.equal(calls[0].path,'owner-update');
  }finally{dom.window.close();}
 });
 test('administrator saves multiple recipient settings and displays the same recipient list for submission',async()=>{
@@ -208,5 +187,15 @@ test('applicant can edit after administrator corrects visitor name without chang
   await d.querySelector('#login').onclick();d.querySelector('#reviewer').value='최초 작성자';d.querySelector('[data-edit="one"]').click();
   assert.equal(d.querySelector('[name="name"]').value,'김진동');enter('purpose','신청자가 다시 수정한 방문목적');await submit();
   assert.equal(records().find(r=>r.id==='one').purpose,'신청자가 다시 수정한 방문목적');
+ }finally{dom.window.close();}
+});
+
+test('weekly unified roster keeps nine columns, masks others and preserves full administrator view',async()=>{
+ const {dom,d,login,records}=await setup({own:true});try{
+  assert.equal(d.querySelectorAll('thead th').length,9);assert.equal(d.querySelectorAll('[data-record]').length,3);assert.match(d.querySelector('#weekLabel').textContent,/2026-10-12 ~ 2026-10-18/);
+  const other=d.querySelector('[data-record="two"]');assert.match(other.textContent,/비공개/);assert.ok(!other.textContent.includes('010-0000-0000'));assert.match(d.querySelector('[data-record="one"]').textContent,/010-0000-0000/);
+  records().push({...base,id:'spanning',visit_date:'2026-10-18',visit_end_date:'2026-10-20',status:'승인 대기'});await d.querySelector('#refresh').onclick();assert.ok(d.querySelector('[data-record="spanning"]'));
+  d.querySelector('#weekNext').click();assert.ok(d.querySelector('[data-record="spanning"]'));assert.equal(d.querySelector('[data-record="one"]'),null);
+  d.querySelector('#weekCurrent').click();await login();assert.ok(!d.querySelector('[data-record="two"]').textContent.includes('비공개'));assert.equal(d.querySelectorAll('thead th').length,9);
  }finally{dom.window.close();}
 });
