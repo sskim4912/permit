@@ -1,3 +1,4 @@
+import {normalizeRecipients} from './mail-recipients.js';
 import {initializeApp} from 'firebase/app';
 import {getAuth, setPersistence, browserSessionPersistence, inMemoryPersistence, signInWithEmailAndPassword, signOut, connectAuthEmulator} from 'firebase/auth';
 import {getFirestore, collection, doc, getDocs, getDoc, setDoc, writeBatch, runTransaction, serverTimestamp, connectFirestoreEmulator} from 'firebase/firestore';
@@ -65,7 +66,7 @@ export function createPermitAPI({config=firebaseConfig, emulator=false, name='pe
     if(path==='logout'){await signOut(auth);return {};}
     if(path==='settings'){
       requireAdmin();const ref=doc(db,'settings','mail');
-      if(data){const recipient=String(data.recipient||'').trim();if(recipient.length>254||!/^\S+@[^\s@]+\.[^\s@]+$/.test(recipient))throw Error('올바른 이메일 주소를 입력해 주세요.');await setDoc(ref,{recipient});return {recipient};}
+      if(data){const recipient=normalizeRecipients(data.recipient);await setDoc(ref,{recipient});return {recipient};}
       const snapshot=await getDoc(ref);return {recipient:snapshot.exists()?snapshot.data().recipient:ADMIN_EMAIL};
     }
     if(path==='requests'&&!data){

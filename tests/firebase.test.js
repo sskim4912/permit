@@ -123,8 +123,10 @@ test('browser-owned applications enforce capability privacy, immutable authors, 
   await a.api('owner-update',{...first,purpose:'본인 수정 회의',reviewer:'최초 작성 담당',author_name:'무시할 작성자',status:'승인 완료'});
   let changed=(await a.api('requests')).find(r=>r.id===first.id);assert.equal(changed.author_name,'최초 작성 담당');assert.equal(changed.modified_by,'최초 작성 담당');assert.ok(changed.modified_at);assert.equal(changed.status,'승인 대기');
   await assert.rejects(()=>a.api('owner-update',{...first,reviewer:'최초 작성 담당'}),/변경/);
-  await service.api('login',{password:'test-only-password'});await service.api('update',{...changed,purpose:'관리자 수정',reviewer:'관리 담당'});
+  await service.api('login',{password:'test-only-password'});await service.api('update',{...changed,purpose:'관리자 수정',name:'김진동',reviewer:'관리 담당'});
   changed=(await a.api('requests')).find(r=>r.id===first.id);assert.equal(changed.purpose,'관리자 수정');assert.equal(changed.author_name,'최초 작성 담당');
+  await a.api('owner-update',{...changed,purpose:'관리자 수정 후 본인 재수정',reviewer:'최초 작성 담당'});
+  changed=(await a.api('requests')).find(r=>r.id===first.id);assert.equal(changed.purpose,'관리자 수정 후 본인 재수정');
   await service.api('bulk',{action:'delivered',items:[changed],reviewer:'발송 담당'});changed=(await a.api('requests')).find(r=>r.id===first.id);
   await assert.rejects(()=>a.api('owner-update',{...changed,reviewer:'수정 시도'}),/전달 전/);await assert.rejects(()=>a.api('owner-delete',{items:[changed],reviewer:'삭제 시도'}),/전달 전/);
   await assert.rejects(()=>a.api('bulk',{action:'approve',items:[changed],reviewer:'승인 시도'}),/관리자/);
@@ -135,4 +137,15 @@ test('browser-owned applications enforce capability privacy, immutable authors, 
   const log=(await getDoc(doc(adminDb,'requestDeletions',mine[0].id))).data();assert.equal(log.actor_name,'최초 작성 담당');assert.equal(log.author_name,'최초 작성 담당');
   assert.equal((await getDoc(doc(publicDb,'applicantCopies','a'.repeat(64),'items',mine[0].id))).exists(),false);
  }finally{await deleteApp(a.app);await deleteApp(b.app);await deleteApp(resumed.app);}
+});
+
+test('admin saves multiple mail recipients with existing string schema and rules reject invalid lists',async()=>{
+ const api=service.api;await api('login',{password:'test-only-password'});
+ await api('settings',{recipient:'first@example.com; second@example.com, FIRST@example.com'});
+ assert.equal((await api('settings')).recipient,'first@example.com,second@example.com');
+ await assert.rejects(()=>api('settings',{recipient:'ok@example.com,invalid'}));
+ const db=env.authenticatedContext(ADMIN_UID).firestore();
+ await assertFails(setDoc(doc(db,'settings','mail'),{recipient:'ok@example.com,invalid'}));
+ await assertFails(setDoc(doc(db,'settings','mail'),{recipient:Array.from({length:11},(_,i)=>`r${i}@example.com`).join(',')}));
+ await api('settings',{recipient:'single@example.com'});assert.equal((await api('settings')).recipient,'single@example.com');await api('logout',{});
 });

@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {JSDOM} from 'jsdom';
+import {composeMailto} from '../src/mail-recipients.js';
 import ExcelJS from 'exceljs';
 import {createApplicantWorkbook} from '../src/xlsx-export.js';
 const tick=()=>new Promise(resolve=>setTimeout(resolve,5));
@@ -14,6 +15,7 @@ async function setup({draft=null,blocked=false,own=false}={}){
  let signed=false,recipient='test@example.com',blob;const calls=[];
  let records=[{...base,id:'one',status:'현장 제출',own,author_name:'최초 작성자'},{...base,id:'two',name:'예시방문자',status:'발주처 제출'},{...base,id:'three',name:'테스트방문자',status:'승인 완료'}];
  w.URL.createObjectURL=value=>{blob=value;return 'blob:test';};w.URL.revokeObjectURL=()=>{};w.HTMLAnchorElement.prototype.click=function(){};
+ w.composeMailto=composeMailto;
  w.loadApplicantExcel=()=>Promise.resolve({createApplicantWorkbook});
  w.createPermitAPI=()=>({api:async(path,data)=>{
   if(path==='session')return {reviewer:signed};
@@ -33,7 +35,7 @@ async function setup({draft=null,blocked=false,own=false}={}){
   if(path==='bulk'){calls.push({path,data:structuredClone(data)});for(const item of data.items){const row=records.find(row=>row.id===item.id);if(!row||row.version!==item.version)throw Error('선택 내역이 변경되었습니다.');}
    for(const item of data.items){const row=records.find(row=>row.id===item.id);if(data.action==='delete')records=records.filter(row=>row.id!==item.id);else{row.version++;row.reviewer=data.reviewer;if(data.action==='approve')row.status='승인 완료';if(data.action==='delivered')row.delivery_at='2026-10-15T02:00:00Z';}}return {};}
  }});
- w.eval(readFileSync('src/app.js','utf8').replace("import {createPermitAPI} from './firebase-api.js';",'').replace("import('/xlsx-export.js')",'loadApplicantExcel()'));await tick();d.querySelector('#authorName').value='테스트 작성자';
+ w.eval(readFileSync('src/app.js','utf8').replace("import {createPermitAPI} from './firebase-api.js';",'').replace("import {composeMailto} from './mail-recipients.js';",'').replace("import('/xlsx-export.js')",'loadApplicantExcel()'));await tick();d.querySelector('#authorName').value='테스트 작성자';
  const enter=(key,value,index=0)=>{const input=d.querySelectorAll(`[name="${key}"]`)[index];input.value=value;input.dispatchEvent(new w.Event('input',{bubbles:true}));return input;};
  const login=async()=>{await d.querySelector('#login').onclick();d.querySelector('#password').value='test-password';await d.querySelector('#loginForm').onsubmit({preventDefault(){}});await tick();};
  const change=(id,value)=>{d.querySelector('#'+id).value=value;d.querySelector('#'+id).dispatchEvent(new w.Event('change',{bubbles:true}));};
@@ -184,4 +186,27 @@ test('applicant Excel contains only owned rows and denies downloads without owne
   change('statusFilter','승인 완료');await d.querySelector('#downloadOwnExcel').onclick();assert.match(d.querySelector('#toast').textContent,/다운로드할 내역이 없습니다/);assert.equal(d.querySelector('#downloadOwnExcel').disabled,false);
  }finally{dom.window.close();}
  const other=await setup();try{await other.d.querySelector('#downloadOwnExcel').onclick();assert.equal(other.getBlob(),undefined);}finally{other.dom.window.close();}
+});
+
+test('clicking applicant edit without actor visibly explains why editor did not open',async()=>{
+ const {dom,d}=await setup({own:true});try{
+  d.querySelector('[data-edit="one"]').click();assert.equal(d.querySelector('#cancelEdit').hidden,true);assert.match(d.querySelector('#toast').textContent,/최초 작성자 이름/);assert.equal(d.activeElement.id,'reviewer');
+  d.querySelector('#reviewer').value='최초 작성자';d.querySelector('[data-edit="one"]').click();assert.equal(d.querySelector('#cancelEdit').hidden,false);
+ }finally{dom.window.close();}
+});
+test('administrator saves multiple recipient settings and displays the same recipient list for submission',async()=>{
+ const {dom,d,login}=await setup();try{
+  await login();d.querySelector('#recipient').value='first@example.com,second@example.com';await d.querySelector('#settingsForm').onsubmit({preventDefault(){}});
+  d.querySelector('#reviewer').value='담당자';d.querySelector('[data-select="one"]').click();await d.querySelector('#mail').onclick();assert.match(d.querySelector('#mailRecipient').textContent,/first@example.com,second@example.com/);
+ }finally{dom.window.close();}
+});
+
+test('applicant can edit after administrator corrects visitor name without changing author',async()=>{
+ const {dom,d,login,enter,submit,records}=await setup({own:true});try{
+  await login();d.querySelector('#reviewer').value='관리자';d.querySelector('[data-edit="one"]').click();enter('name','김진동');await submit();
+  assert.equal(records().find(r=>r.id==='one').author_name,'최초 작성자');
+  await d.querySelector('#login').onclick();d.querySelector('#reviewer').value='최초 작성자';d.querySelector('[data-edit="one"]').click();
+  assert.equal(d.querySelector('[name="name"]').value,'김진동');enter('purpose','신청자가 다시 수정한 방문목적');await submit();
+  assert.equal(records().find(r=>r.id==='one').purpose,'신청자가 다시 수정한 방문목적');
+ }finally{dom.window.close();}
 });
