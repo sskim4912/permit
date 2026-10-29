@@ -130,3 +130,9 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
 .week-range{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;color:#60796c}
 .week-range>span{font-size:12px;white-space:nowrap}.week-navigation .week-range strong{order:initial;width:auto;padding:0;font-size:15px;color:#284f3c;font-variant-numeric:tabular-nums;white-space:nowrap}
 @media(max-width:720px){.week-navigation{display:flex;flex-direction:column;align-items:stretch;gap:14px;padding:12px}.week-buttons{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.week-navigation .week-buttons button{font-size:13px;padding:10px 4px;min-height:46px}.week-range{justify-content:center;padding-top:10px;border-top:1px solid #d6e5dc}.week-navigation .week-range strong{font-size:13px}}
+
+/* Row checkboxes are the only selection control; headers also offer sorting. */
+.sort-button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:38px;padding:7px 9px;border:1px solid #c7d8cc;border-radius:7px;background:#f8fbf9;color:#3b5d4b;font-size:15px;white-space:nowrap}
+.sort-button.is-active{background:#d8ebe0;border-color:#94b8a2;color:#125f46}.sort-button:hover{background:#cce3d5}.sort-button:focus-visible,.mobile-sort button:focus-visible{outline:3px solid #91bfa9;outline-offset:3px}
+.mobile-sort{display:none}
+@media(max-width:720px){.mobile-sort{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:14px 0}.mobile-sort>span{font-size:13px;color:#62776c}.mobile-sort button{min-height:42px;padding:9px 13px;border:1px solid #c7d8cc;font-size:14px}.mobile-sort button.is-active{background:#d8ebe0;border-color:#94b8a2;color:#125f46}}

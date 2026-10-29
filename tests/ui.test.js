@@ -78,7 +78,7 @@ test('admin CSV preserves phone text while escaping formulas; logout removes ori
  const {dom,d,login,getBlob}=await setup();try{await login();await d.querySelector('#download').onclick();const csv=await getBlob().text();assert.match(csv,/010-0000-0000/);assert.ok(csv.includes("'=formula"));assert.match(csv,/기존 상태값/);d.querySelector('[data-select="one"]').click();await d.querySelector('#login').onclick();assert.equal(d.querySelector('#adminControls').hidden,true);assert.ok(d.querySelector('#list').textContent.includes('가상방문자'));assert.ok(!d.querySelector('#list').textContent.includes('1990-01-23'));assert.equal(d.querySelector('#mailBody').value,'');assert.equal(d.querySelectorAll('[data-select]').length,0);}finally{dom.window.close();}
 });
 test('status and search filters clear selections and map legacy statuses without rewriting data',async()=>{
- const {dom,d,login,change,records}=await setup();try{await login();d.querySelector('#selectAll').click();assert.equal(d.querySelectorAll('[data-select]:checked').length,3);d.querySelector('#selectAll').click();assert.equal(d.querySelectorAll('[data-select]:checked').length,0);d.querySelector('[data-select="one"]').click();change('statusFilter','승인 대기');assert.equal(d.querySelectorAll('[data-record]').length,2);assert.equal(d.querySelector('#selectedCount').textContent,'0명 선택 · 최대 10명');assert.match(d.querySelector('#list').textContent,/기존 전달 기록/);assert.equal(records()[0].status,'현장 제출');assert.equal(records()[1].status,'발주처 제출');change('statusFilter','승인 완료');assert.equal(d.querySelectorAll('[data-record]').length,1);}finally{dom.window.close();}
+ const {dom,d,login,change,records}=await setup();try{await login();assert.equal(d.querySelector('#selectAll'),null);assert.equal(d.querySelectorAll('[data-select]:checked').length,0);d.querySelector('[data-select="one"]').click();change('statusFilter','승인 대기');assert.equal(d.querySelectorAll('[data-record]').length,2);assert.equal(d.querySelector('#selectedCount').textContent,'0명 선택 · 최대 10명');assert.match(d.querySelector('#list').textContent,/기존 전달 기록/);assert.equal(records()[0].status,'현장 제출');assert.equal(records()[1].status,'발주처 제출');change('statusFilter','승인 완료');assert.equal(d.querySelectorAll('[data-record]').length,1);}finally{dom.window.close();}
 });
 
 test('visit periods validate ordering, filter inclusive dates and survive edit, email and CSV',async()=>{
@@ -208,5 +208,18 @@ test('detailed Excel export is administrator-only and includes only filtered det
   const book=new ExcelJS.Workbook();await book.xlsx.load(await getBlob().arrayBuffer());const sheet=book.worksheets[0];
   assert.equal(sheet.columnCount,22);assert.equal(sheet.getCell('G2').value,'테스트방문자');assert.ok(!sheet.getColumn(7).values.includes('예시방문자'));
   assert.equal(d.querySelector('#download').textContent,'상세 내역 CSV 다운로드');assert.equal(d.querySelector('#downloadDetailedExcel').disabled,false);
+ }finally{dom.window.close();}
+});
+
+test('header sorting toggles dates and Korean names without changing selected records or export order',async()=>{
+ const {dom,d,login,records,getBlob}=await setup();try{
+  await login();records()[0].visit_date='2026-10-13';records()[1].visit_date='2026-10-14';records()[2].visit_date='2026-10-15';await d.querySelector('#refresh').onclick();
+  const ids=()=>[...d.querySelectorAll('[data-record]')].map(r=>r.dataset.record);
+  assert.deepEqual(ids(),['three','two','one']);d.querySelector('[data-select="one"]').click();
+  d.querySelector('thead [data-sort="visit_date"]').click();assert.deepEqual(ids(),['one','two','three']);assert.equal(d.querySelector('[data-select="one"]').checked,true);assert.equal(d.querySelector('[data-sort-heading="visit_date"]').getAttribute('aria-sort'),'ascending');
+  d.querySelector('thead [data-sort="name"]').click();assert.deepEqual(ids(),['one','two','three']);
+  d.querySelector('thead [data-sort="name"]').click();assert.deepEqual(ids(),['three','two','one']);assert.equal(d.querySelector('[data-select="one"]').checked,true);
+  await d.querySelector('#downloadExcel').onclick();const book=new ExcelJS.Workbook();await book.xlsx.load(await getBlob().arrayBuffer());assert.equal(book.worksheets[0].getCell('C2').value,'테스트방문자');
+  d.querySelector('.mobile-sort [data-sort="name"]').click();assert.deepEqual(ids(),['one','two','three']);assert.equal(d.querySelector('#selectAll'),null);
  }finally{dom.window.close();}
 });
