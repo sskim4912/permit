@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {JSDOM} from 'jsdom';
 import {composeMailto} from '../src/mail-recipients.js';
 import ExcelJS from 'exceljs';
-import {createApplicantWorkbook} from '../src/xlsx-export.js';
+import {createApplicantWorkbook,createDetailedWorkbook} from '../src/xlsx-export.js';
 const tick=()=>new Promise(resolve=>setTimeout(resolve,5));
 const base={visit_date:'2026-10-15',purpose:'회의',team:'공무팀',gate:'서문',name:'가상방문자',birth:'1990-01-23',phone:'010-0000-0000',plate:'=formula',vehicle_type:'승용',vehicle_name:'캐스퍼',role:'운전자',shoes:'280',reviewer:'',version:1,created:'2026-10-15T00:00:00Z'};
 async function setup({draft=null,blocked=false,own=false}={}){
@@ -17,7 +17,7 @@ async function setup({draft=null,blocked=false,own=false}={}){
  let records=[{...base,id:'one',status:'현장 제출',own,author_name:'최초 작성자'},{...base,id:'two',name:'예시방문자',status:'발주처 제출'},{...base,id:'three',name:'테스트방문자',status:'승인 완료'}];
  w.URL.createObjectURL=value=>{blob=value;return 'blob:test';};w.URL.revokeObjectURL=()=>{};w.HTMLAnchorElement.prototype.click=function(){};
  w.composeMailto=composeMailto;
- w.loadApplicantExcel=()=>Promise.resolve({createApplicantWorkbook});
+ w.loadApplicantExcel=()=>Promise.resolve({createApplicantWorkbook,createDetailedWorkbook});
  w.createPermitAPI=()=>({api:async(path,data)=>{
   if(path==='session')return {reviewer:signed};
   if(path==='login'){if(data.password!=='test-password')throw Error('비밀번호가 맞지 않습니다.');signed=true;return {};}
@@ -197,5 +197,15 @@ test('weekly unified roster keeps nine columns, masks others and preserves full 
   records().push({...base,id:'spanning',visit_date:'2026-10-18',visit_end_date:'2026-10-20',status:'승인 대기'});await d.querySelector('#refresh').onclick();assert.ok(d.querySelector('[data-record="spanning"]'));
   d.querySelector('#weekNext').click();assert.ok(d.querySelector('[data-record="spanning"]'));assert.equal(d.querySelector('[data-record="one"]'),null);
   d.querySelector('#weekCurrent').click();await login();assert.ok(!d.querySelector('[data-record="two"]').textContent.includes('비공개'));assert.equal(d.querySelectorAll('thead th').length,9);
+ }finally{dom.window.close();}
+});
+
+test('detailed Excel export is administrator-only and includes only filtered detailed records',async()=>{
+ const {dom,d,login,change,getBlob}=await setup({own:true});try{
+  await d.querySelector('#downloadDetailedExcel').onclick();assert.equal(getBlob(),undefined);
+  await login();change('statusFilter','승인 완료');await d.querySelector('#downloadDetailedExcel').onclick();
+  const book=new ExcelJS.Workbook();await book.xlsx.load(await getBlob().arrayBuffer());const sheet=book.worksheets[0];
+  assert.equal(sheet.columnCount,22);assert.equal(sheet.getCell('G2').value,'테스트방문자');assert.ok(!sheet.getColumn(7).values.includes('예시방문자'));
+  assert.equal(d.querySelector('#download').textContent,'상세 내역 CSV 다운로드');assert.equal(d.querySelector('#downloadDetailedExcel').disabled,false);
  }finally{dom.window.close();}
 });

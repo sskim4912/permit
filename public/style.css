@@ -80,3 +80,18 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
 .table-wrap table{table-layout:fixed;text-align:center}.table-wrap th,.table-wrap td{border:1px solid #d5dfd8;overflow-wrap:anywhere}.table-wrap th{background:#e9eeeb;font-weight:600}.table-wrap th:first-child{width:6%}.table-wrap th:nth-child(2){width:17%}.table-wrap th:nth-child(5){width:15%}.table-wrap td{vertical-align:top}
 #adminSettings .settings-content>button{margin:0 8px 10px 0}
 @media(max-width:720px){.table-wrap table{text-align:left;table-layout:auto}.table-wrap td{border:0}.number-cell>span{display:inline}.number-cell input{display:inline-block;margin:0 0 0 14px}.week-navigation{gap:6px}.week-navigation button{font-size:12px;padding:9px}.week-navigation strong{order:-1;width:100%;padding:0 0 6px}.record-info .row-actions{max-width:200px}.table-wrap td:has(.record-info){grid-column:1/-1}}
+
+/* Center roster headers and values explicitly, including expanded rows. */
+.table-wrap table th,.table-wrap table td{text-align:center;vertical-align:middle}
+.table-wrap table th{padding:16px 10px;line-height:1.6}
+.table-wrap table td{padding:16px 10px;line-height:1.7;font-variant-numeric:tabular-nums}
+.number-cell input{display:block;margin:9px auto 0}.record-info summary{text-align:center;list-style-position:inside}.record-info .row-actions{margin-left:auto;margin-right:auto}
+@media(max-width:720px){
+ .table-wrap table td{padding:0;text-align:center;align-self:center;font-size:14px}
+ .table-wrap table td::before{text-align:center;margin-bottom:6px;font-size:11px}
+ .table-wrap tr:not(.inline-editor-row){align-items:center;gap:18px 12px;padding:17px 14px}
+ .number-cell input{display:inline-block;vertical-align:middle;margin:0 0 0 12px}
+ .record-info>div{text-align:center}.record-info .row-actions{margin:10px auto 0;max-width:240px}
+ #adminSettings .settings-content>button{display:block;width:100%;margin:0 0 10px}
+ .table-wrap tr.inline-editor-row>td{text-align:left;padding:0 0 15px}
+}

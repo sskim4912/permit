@@ -17,3 +17,14 @@ test('xlsx includes every visitor beyond template minimum without truncation',as
  const book=new ExcelJS.Workbook();await book.xlsx.load(await createApplicantWorkbook(Array.from({length:12},(_,i)=>({visit_date:'2026-10-28',name:`방문자${i}`,shoes:'필요없음'}))));
  assert.equal(book.worksheets[0].rowCount,13);assert.equal(book.worksheets[0].getCell('A13').value,12);assert.equal(book.worksheets[0].getCell('I13').value,'필요없음');
 });
+
+test('detailed workbook matches all 22 columns, styling and Korean timestamps without formulas',async()=>{
+ const {createDetailedWorkbook}=await import('../src/xlsx-export.js');
+ const data=[{visit_date:'2026-10-30',name:'상세 예시',phone:'010-0123-4567',plate:'=1+1',status:'현장 제출',created:'2026-10-30T00:00:00Z',author_name:'신청자',shoes:'270'}];
+ const book=new ExcelJS.Workbook();await book.xlsx.load(await createDetailedWorkbook(data));const sheet=book.worksheets[0];
+ assert.equal(sheet.columnCount,22);assert.equal(sheet.rowCount,6);assert.equal(sheet.getCell('A2').value,1);assert.equal(sheet.getCell('C2').value,'2026-10-30');
+ assert.equal(sheet.getCell('I2').value,'010-0123-4567');assert.equal(sheet.getCell('J2').value,'=1+1');assert.equal(sheet.getCell('J2').type,ExcelJS.ValueType.String);
+ assert.equal(sheet.getCell('O2').value,'승인 대기');assert.equal(sheet.getCell('P2').value,'현장 제출');assert.equal(sheet.getCell('V2').value,'2026-10-30 09:00:00');
+ assert.equal(sheet.getCell('V1').fill.fgColor.argb,'FFD0D0D0');assert.equal(sheet.getCell('V6').border.bottom.style,'thin');assert.equal(sheet.getCell('I2').alignment.horizontal,'center');assert.equal(sheet.getCell('I2').alignment.vertical,'middle');
+ assert.equal(sheet.getCell('I2').numFmt,'@');assert.equal(sheet.autoFilter,'A1:V2');
+});
