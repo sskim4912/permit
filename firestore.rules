@@ -28,6 +28,8 @@ service cloud.firestore {
     function publicData(d) {
       return ('visit_end_date' in d) ? {'visit_date':d.visit_date,'visit_end_date':d.visit_end_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':d.reviewer,'version':d.version,'created':d.created} : {'visit_date':d.visit_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':d.reviewer,'version':d.version,'created':d.created};
     }
+    function rosterData(d) { return ('visit_end_date' in d) ? {'visit_date':d.visit_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':d.reviewer,'version':d.version,'created':d.created,'name':d.name,'phone':d.phone,'plate':d.plate,'vehicle_type':d.vehicle_type,'vehicle_name':d.vehicle_name,'role':d.role,'shoes':d.shoes,'gate':d.gate,'birth_mask':(d.birth.matches('^19.*')?'19**-**-**':d.birth.matches('^20.*')?'20**-**-**':'****-**-**'),'visit_end_date':d.visit_end_date} : {'visit_date':d.visit_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':d.reviewer,'version':d.version,'created':d.created,'name':d.name,'phone':d.phone,'plate':d.plate,'vehicle_type':d.vehicle_type,'vehicle_name':d.vehicle_name,'role':d.role,'shoes':d.shoes,'gate':d.gate,'birth_mask':(d.birth.matches('^19.*')?'19**-**-**':d.birth.matches('^20.*')?'20**-**-**':'****-**-**')}; }
+    function matchesPublic(d,p) { return p == publicData(d) || p == rosterData(d); }
     function pending(d) { return d.status in ['승인 대기','현장 제출'] && !('delivery_at' in d); }
     function keepAuthor(before, after) {
       return (!('author_name' in before) || after.author_name == before.author_name)
@@ -51,7 +53,7 @@ service cloud.firestore {
         && request.resource.data.reviewer == ''
         && request.resource.data.version == 1
         && request.resource.data.created == request.time
-        && getAfter(/databases/$(database)/documents/publicRequests/$(id)).data == publicData(request.resource.data);
+        && matchesPublic(request.resource.data,getAfter(/databases/$(database)/documents/publicRequests/$(id)).data);
       allow update: if (isAdmin() || ownerChange(resource.data,request.resource.data)) && valid(request.resource.data)
         && keepAuthor(resource.data,request.resource.data)
         && (!('visit_end_date' in resource.data) || ('visit_end_date' in request.resource.data))
@@ -59,16 +61,16 @@ service cloud.firestore {
         && (isAdmin() ? request.resource.data.reviewer.size() > 0 : request.resource.data.modified_by.size() > 0)
         && request.resource.data.version == resource.data.version + 1
         && request.resource.data.created == resource.data.created
-        && getAfter(/databases/$(database)/documents/publicRequests/$(id)).data == publicData(request.resource.data);
+        && matchesPublic(request.resource.data,getAfter(/databases/$(database)/documents/publicRequests/$(id)).data);
       allow delete: if (isAdmin() || (pending(resource.data) && ('owner_key' in resource.data) && deletedLog(id,resource.data)))
         && !existsAfter(/databases/$(database)/documents/publicRequests/$(id));
     }
     match /publicRequests/{id} {
-      // 공개 현황에는 신청자의 이름·생년월일·전화번호·차량번호를 저장하지 않는다.
+      // 공개 명단에는 요청된 방문정보와 마스킹된 생년월일만 저장하며 원본 생년월일·소유 키는 제외한다.
       allow read: if true;
-      allow create: if request.resource.data == publicData(getAfter(/databases/$(database)/documents/requests/$(id)).data)
+      allow create: if matchesPublic(getAfter(/databases/$(database)/documents/requests/$(id)).data,request.resource.data)
         && getAfter(/databases/$(database)/documents/requests/$(id)).data.created == request.time;
-      allow update: if request.resource.data == publicData(getAfter(/databases/$(database)/documents/requests/$(id)).data);
+      allow update: if matchesPublic(getAfter(/databases/$(database)/documents/requests/$(id)).data,request.resource.data);
       allow delete: if !existsAfter(/databases/$(database)/documents/requests/$(id));
     }
     // The unguessable browser key is a bearer credential, never stored in public summaries.

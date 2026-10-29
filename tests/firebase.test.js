@@ -5,12 +5,13 @@ import {initializeTestEnvironment, assertFails, assertSucceeds} from '@firebase/
 import {doc, getDoc, getDocs, collection, collectionGroup, setDoc, deleteDoc, writeBatch, serverTimestamp} from 'firebase/firestore';
 import {deleteApp} from 'firebase/app';
 import {createPermitAPI, ADMIN_UID} from '../src/firebase-api.js';
+import {publicRoster} from '../src/public-roster.js';
 import {initializeApp as initializeAdminApp, deleteApp as deleteAdminApp} from 'firebase-admin/app';
 import {getAuth as getAdminAuth} from 'firebase-admin/auth';
 let env,service,outsider,adminApp;
 const project='demo-permit';
 const item={visit_date:'2026-10-15',purpose:'회의',team:'안전팀',gate:'서문',name:'테스트 방문자',birth:'1990-01-01',phone:'010-0000-0000',plate:'',vehicle_type:'',vehicle_name:'',role:'도보',shoes:'필요없음'};
-const pub=d=>Object.fromEntries(['visit_date','visit_end_date','purpose','team','status','reviewer','version','created'].filter(k=>k in d).map(k=>[k,d[k]]));
+const pub=publicRoster;
 before(async()=>{
  env=await initializeTestEnvironment({projectId:project,firestore:{host:'127.0.0.1',port:8080,rules:readFileSync('firestore.rules','utf8')}});
  process.env.FIREBASE_AUTH_EMULATOR_HOST='127.0.0.1:9099';
@@ -25,7 +26,7 @@ test('anonymous batch submission, privacy, administrator login, settings and edi
  await assert.rejects(()=>api('requests',{author_name:'검증 작성자',items:[item,{...item,birth:'2026-02-30'}]}));
  assert.equal((await api('requests')).length,0);
  assert.equal((await api('requests',{author_name:'검증 작성자',items:Array.from({length:10},()=>item)})).count,10);
- let rows=await outsider.api('requests');assert.equal(rows.length,10);assert.equal(rows[0].name,undefined);assert.equal(rows[0].phone,undefined);
+ let rows=await outsider.api('requests');assert.equal(rows.length,10);assert.equal(rows[0].name,item.name);assert.equal(rows[0].phone,item.phone);assert.equal(rows[0].birth,undefined);assert.equal(rows[0].birth_mask,'19**-**-**');assert.equal(rows[0].owner_key,undefined);
  await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(),'requests',rows[0].id)));
  await assert.rejects(()=>api('update',{id:rows[0].id,version:1,reviewer:'담당자'}));
  await assert.rejects(()=>api('login',{password:'wrong'}));
@@ -96,7 +97,7 @@ test('multi-day periods persist privately and publicly, reject reversed dates an
  await assert.rejects(()=>api('requests',{author_name:'검증 작성자',items:[{...item,visit_end_date:'2026-10-14'}]}),/방문종료일/);
  await assert.rejects(()=>api('requests',{author_name:'검증 작성자',items:[{...item,visit_end_date:'2026-02-30'}]}),/날짜/);
  await api('requests',{author_name:'검증 작성자',items:[{...item,name:'기간검증',visit_end_date:'2026-10-20'}]});
- let publicRows=await outsider.api('requests');assert.ok(publicRows.some(r=>r.visit_end_date==='2026-10-20'));assert.ok(publicRows.every(r=>!r.name));
+ let publicRows=await outsider.api('requests');assert.ok(publicRows.some(r=>r.visit_end_date==='2026-10-20'));assert.ok(publicRows.every(r=>!r.birth&&!r.owner_key));
  await api('login',{password:'test-only-password'});let row=(await api('requests')).find(r=>r.name==='기간검증');assert.equal(row.visit_end_date,'2026-10-20');
  await api('update',{...row,visit_end_date:'2026-10-22',reviewer:'기간담당자'});row=(await api('requests')).find(r=>r.id===row.id);assert.equal(row.visit_end_date,'2026-10-22');
  await api('bulk',{action:'approve',items:[{id:row.id,version:row.version}],reviewer:'기간담당자'});row=(await api('requests')).find(r=>r.id===row.id);assert.equal(row.visit_end_date,'2026-10-22');
@@ -111,7 +112,7 @@ test('browser-owned applications enforce capability privacy, immutable authors, 
   await assert.rejects(()=>a.api('requests',{items:[item]}),/이름/);
   await a.api('requests',{author_name:'최초 작성 담당',items:Array.from({length:10},(_,i)=>({...item,name:'본인검증'+i}))});
   let mine=(await a.api('requests')).filter(r=>r.own);assert.equal(mine.length,10);assert.ok(mine.every(r=>r.author_name==='최초 작성 담당'));
-  assert.ok((await b.api('requests')).every(r=>!r.name&&!r.owner_key&&!r.author_name));assert.equal((await resumed.api('requests')).filter(r=>r.own).length,10);
+  assert.ok((await b.api('requests')).every(r=>!r.birth&&!r.owner_key&&!r.author_name));assert.equal((await resumed.api('requests')).filter(r=>r.own).length,10);
   const first=mine[0];await assert.rejects(()=>b.api('owner-update',{...first,reviewer:'다른 사람'}),/찾을 수/);await assert.rejects(()=>b.api('owner-delete',{items:[first],reviewer:'다른 사람'}),/변경/);
   const publicDb=env.unauthenticatedContext().firestore(),adminDb=env.authenticatedContext(ADMIN_UID).firestore();
   await assertFails(getDocs(collection(publicDb,'applicantCopies')));await assertFails(getDocs(collectionGroup(publicDb,'items')));await assertFails(getDoc(doc(publicDb,'requests',first.id)));await assertFails(getDoc(doc(publicDb,'requestDeletions',first.id)));
@@ -159,4 +160,19 @@ test('browser-owned batch deletion derives each original author without a second
   assert.equal((await client.api('requests')).filter(r=>r.own).length,0);
   const db=env.authenticatedContext(ADMIN_UID).firestore();for(const row of mine){const log=(await getDoc(doc(db,'requestDeletions',row.id))).data();assert.equal(log.actor_name,row.author_name);}
  }finally{await deleteApp(client.app);}
+});
+
+test('public roster masks birth on server and administrator safely upgrades legacy summaries',async()=>{
+ const config={apiKey:'demo-key',projectId:project},owner=createPermitAPI({config,emulator:true,name:'projection-owner',ownerKey:'d'.repeat(64)});
+ try{
+  await owner.api('requests',{author_name:'공개검증 작성자',items:[{...item,name:'공개검증',phone:'010-0000-1234',plate:'테스트0001',birth:'2001-02-03'}]});
+  let mine=(await owner.api('requests')).find(r=>r.own);assert.equal(mine.birth,'2001-02-03');
+  let pubRow=(await outsider.api('requests')).find(r=>r.id===mine.id);assert.equal(pubRow.birth_mask,'20**-**-**');assert.equal(pubRow.birth,undefined);assert.equal(pubRow.name,'공개검증');assert.equal(pubRow.phone,'010-0000-1234');assert.equal(pubRow.owner_key,undefined);
+  const adminDb=env.authenticatedContext(ADMIN_UID).firestore(),ref=doc(adminDb,'publicRequests',mine.id),original=(await getDoc(doc(adminDb,'requests',mine.id))).data();
+  await assertFails(setDoc(ref,{...pub(original),birth:original.birth}));await assertFails(setDoc(ref,{...pub(original),birth_mask:original.birth}));await assertFails(setDoc(ref,{...pub(original),owner_key:original.owner_key}));
+  const legacy=Object.fromEntries(['visit_date','visit_end_date','purpose','team','status','reviewer','version','created'].filter(k=>k in original).map(k=>[k,original[k]]));
+  await setDoc(ref,legacy);await service.api('login',{password:'test-only-password'});await service.api('requests');await service.api('requests');
+  pubRow=(await outsider.api('requests')).find(r=>r.id===mine.id);assert.equal(pubRow.name,'공개검증');assert.equal(pubRow.birth_mask,'20**-**-**');
+  const after=(await getDoc(doc(adminDb,'requests',mine.id))).data();assert.equal(after.birth,original.birth);assert.equal(after.version,original.version);assert.equal(after.owner_key,original.owner_key);await service.api('logout',{});
+ }finally{await deleteApp(owner.app);}
 });

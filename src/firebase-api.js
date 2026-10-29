@@ -1,3 +1,4 @@
+import {publicRoster} from './public-roster.js';
 import {normalizeRecipients} from './mail-recipients.js';
 import {initializeApp} from 'firebase/app';
 import {getAuth, setPersistence, browserSessionPersistence, inMemoryPersistence, signInWithEmailAndPassword, signOut, connectAuthEmulator} from 'firebase/auth';
@@ -14,7 +15,6 @@ export const firebaseConfig = {
 export const ADMIN_UID = 'ICEik0y5U3aETq3mvW7sesAsNRB2';
 const ADMIN_EMAIL = 'sskim07@gsenc.com';
 const FIELDS = ['visit_date','visit_end_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team'];
-const PUBLIC_FIELDS = ['visit_date','visit_end_date','purpose','team','status','reviewer','version','created'];
 const stages = ['승인 대기','현장 제출','현장 확인','발주처 제출','승인 완료'];
 const editable = row => ['승인 대기','현장 제출'].includes(row.status) && !row.delivery_at;
 const personName = value => {const name=String(value||'').trim();if(!name||name.length>50)throw Error('작성·수정·삭제하는 분의 이름을 50자 이내로 입력해 주세요.');return name;};
@@ -29,7 +29,7 @@ function payload(item) {
   if(!['서문','정문'].includes(result.gate)||!['운전자','동승자','도보'].includes(result.role)||!['필요없음',...Array.from({length:15},(_,i)=>String(230+i*5))].includes(result.shoes))throw Error('출입위치, 탑승 구분, 안전화를 확인해 주세요.');
   return result;
 }
-const summary=item=>Object.fromEntries(PUBLIC_FIELDS.filter(key=>key in item).map(key=>[key,item[key]]));
+const summary=publicRoster;
 const serialize=snapshot=>({id:snapshot.id,...snapshot.data(),created:snapshot.data().created?.toDate?.().toISOString()||'',...(snapshot.data().modified_at?{modified_at:snapshot.data().modified_at.toDate().toISOString()}:{}),...(snapshot.data().delivery_at?{delivery_at:snapshot.data().delivery_at.toDate().toISOString()}:{})});
 export function createPermitAPI({config=firebaseConfig, emulator=false, name='permit',ownerKey=null}={}) {
   const app=initializeApp(config,name),auth=getAuth(app),db=getFirestore(app);
@@ -71,6 +71,18 @@ export function createPermitAPI({config=firebaseConfig, emulator=false, name='pe
     }
     if(path==='requests'&&!data){
       const snapshot=await getDocs(collection(db,isAdmin()?'requests':'publicRequests'));
+      if(isAdmin()){
+        const published=await getDocs(collection(db,'publicRequests')),byId=new Map(published.docs.map(d=>[d.id,d.data()]));
+        const equal=(a,b)=>{const keys=Object.keys(a);return b&&keys.length===Object.keys(b).length&&keys.every(k=>a[k]?.isEqual?a[k].isEqual(b[k]):a[k]===b[k]);};
+        const stale=snapshot.docs.filter(d=>!equal(summary(d.data()),byId.get(d.id)));
+        for(let offset=0;offset<stale.length;offset+=10){
+          const chunk=stale.slice(offset,offset+10);
+          await runTransaction(db,async transaction=>{
+            const originals=[];for(const item of chunk)originals.push(await transaction.get(doc(db,'requests',item.id)));
+            for(const original of originals)if(original.exists())transaction.set(doc(db,'publicRequests',original.id),summary(original.data()));
+          });
+        }
+      }
       let rows=snapshot.docs.map(serialize);const key=browserKey();
       if(!isAdmin()&&key){const own=await getDocs(collection(db,'applicantCopies',key,'items'));const copies=new Map(own.docs.map(s=>[s.id,serialize(s)]));rows=rows.map(row=>{const copy=copies.get(row.id);return copy&&copy.version===row.version?{...copy,own:true}:row;});}
       return rows.sort((a,b)=>b.created.localeCompare(a.created)||b.id.localeCompare(a.id));

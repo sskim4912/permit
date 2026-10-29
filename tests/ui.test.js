@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {JSDOM} from 'jsdom';
 import {composeMailto} from '../src/mail-recipients.js';
+import {publicRoster} from '../src/public-roster.js';
 import ExcelJS from 'exceljs';
 import {createApplicantWorkbook,createDetailedWorkbook} from '../src/xlsx-export.js';
 const tick=()=>new Promise(resolve=>setTimeout(resolve,5));
@@ -22,7 +23,7 @@ async function setup({draft=null,blocked=false,own=false}={}){
   if(path==='session')return {reviewer:signed};
   if(path==='login'){if(data.password!=='test-password')throw Error('비밀번호가 맞지 않습니다.');signed=true;return {};}
   if(path==='logout'){signed=false;return {};}
-  if(path==='requests'&&!data)return records.map(row=>signed||row.own?{...row}:Object.fromEntries(['id','visit_date','visit_end_date','purpose','team','status','reviewer','version','created'].map(key=>[key,row[key]])));
+  if(path==='requests'&&!data)return records.map(row=>signed||row.own?{...row}:{id:row.id,...publicRoster(row)});
   if(path==='requests'){calls.push({path,data:structuredClone(data)});records.push(...data.items.map((row,index)=>({...row,own:true,author_name:data.author_name,id:'new'+index,status:'승인 대기',reviewer:'',version:1,created:'2026-10-15T01:00:00Z'})));return {count:data.items.length};}
   if(path==='owner-update'){
    const row=records.find(r=>r.id===data.id);if(!row?.own||!['승인 대기','현장 제출'].includes(row.status)||row.delivery_at)throw Error('본인 승인 대기만 수정할 수 있습니다.');calls.push({path,data:structuredClone(data)});Object.assign(row,data,{modified_by:data.reviewer,modified_at:'2026-10-16T00:00:00Z',version:row.version+1});return {};
@@ -43,8 +44,8 @@ async function setup({draft=null,blocked=false,own=false}={}){
  const submit=()=>d.querySelector('#requestForm').onsubmit({preventDefault(){}});
  return {dom,w,d,calls,enter,login,change,submit,getBlob:()=>blob,records:()=>records};
 }
-test('one screen and two displayed statuses; non-admin has no privileged controls or personal data',async()=>{
- const {dom,d}=await setup();try{assert.equal(d.querySelector('#requestPanel').hidden,false);assert.equal(d.querySelector('#adminControls').hidden,true);assert.equal(d.querySelector('#adminSettings').hidden,true);assert.equal(d.querySelectorAll('[data-select]').length,0);assert.equal(d.querySelectorAll('[data-edit]').length,0);assert.ok(!d.querySelector('#list').textContent.includes('가상방문자'));assert.deepEqual([...d.querySelector('#statusFilter').options].map(option=>option.textContent),['전체','승인 대기','승인 완료']);assert.ok(!d.querySelector('#list').textContent.includes('현장 제출'));}finally{dom.window.close();}
+test('one screen and two statuses; public names are visible while original birth and privileged controls are hidden',async()=>{
+ const {dom,d}=await setup();try{assert.equal(d.querySelector('#requestPanel').hidden,false);assert.equal(d.querySelector('#adminControls').hidden,true);assert.equal(d.querySelector('#adminSettings').hidden,true);assert.equal(d.querySelectorAll('[data-select]').length,0);assert.equal(d.querySelectorAll('[data-edit]').length,0);assert.ok(d.querySelector('#list').textContent.includes('가상방문자'));assert.ok(!d.querySelector('#list').textContent.includes('1990-01-23'));assert.deepEqual([...d.querySelector('#statusFilter').options].map(option=>option.textContent),['전체','승인 대기','승인 완료']);assert.ok(!d.querySelector('#list').textContent.includes('현장 제출'));}finally{dom.window.close();}
 });
 test('numeric input autoformats, auto-saves and submits without manual draft commands',async()=>{
  const {dom,w,d,enter,calls,submit}=await setup();try{enter('purpose','테스트');enter('team','테스트팀');enter('name','가상방문자');assert.equal(enter('birth','19900123').value,'1990-01-23');assert.equal(enter('phone','01000000000').value,'010-0000-0000');await tick();assert.equal(JSON.parse(w.sessionStorage.getItem('permit-draft'))[0].birth,'1990-01-23');assert.match(d.querySelector('#draftStatus').textContent,/자동 임시저장됨/);await submit();assert.equal(calls[0].data.items[0].phone,'010-0000-0000');assert.equal(w.sessionStorage.getItem('permit-draft'),null);assert.equal(d.querySelector('[name="name"]').value,'');assert.match(d.querySelector('#list').textContent,/승인 대기/);}finally{dom.window.close();}
@@ -73,8 +74,8 @@ test('administrator deletion requires confirmation and clears selected rows',asy
 test('inline editor retains unsaved edits across refresh and cancellation restores applicant draft',async()=>{
  const {dom,w,d,login,enter,calls,submit}=await setup();try{enter('name','작성중 방문자');await tick();await login();d.querySelector('[data-edit="one"]').click();assert.ok(d.querySelector('#list #requestForm'));assert.equal(d.querySelector('#formHome #requestForm'),null);enter('purpose','수정된 회의');await d.querySelector('#refresh').onclick();assert.equal(d.querySelector('[name="purpose"]').value,'수정된 회의');assert.equal(d.querySelectorAll('.inline-editor-row').length,1);d.querySelector('#cancelEdit').click();assert.equal(d.querySelector('[name="name"]').value,'작성중 방문자');d.querySelector('[data-edit="one"]').click();d.querySelector('#reviewer').value='담당자';enter('purpose','최종 수정');await submit();assert.equal(calls[0].path,'update');assert.equal(calls[0].data.purpose,'최종 수정');assert.equal(d.querySelectorAll('.inline-editor-row').length,0);assert.equal(JSON.parse(w.sessionStorage.getItem('permit-draft'))[0].name,'작성중 방문자');}finally{dom.window.close();}
 });
-test('admin CSV preserves phone text while escaping formulas; logout clears private UI',async()=>{
- const {dom,d,login,getBlob}=await setup();try{await login();await d.querySelector('#download').onclick();const csv=await getBlob().text();assert.match(csv,/010-0000-0000/);assert.ok(csv.includes("'=formula"));assert.match(csv,/기존 상태값/);d.querySelector('[data-select="one"]').click();await d.querySelector('#login').onclick();assert.equal(d.querySelector('#adminControls').hidden,true);assert.ok(!d.querySelector('#list').textContent.includes('가상방문자'));assert.equal(d.querySelector('#mailBody').value,'');assert.equal(d.querySelectorAll('[data-select]').length,0);}finally{dom.window.close();}
+test('admin CSV preserves phone text while escaping formulas; logout removes original birth and admin controls',async()=>{
+ const {dom,d,login,getBlob}=await setup();try{await login();await d.querySelector('#download').onclick();const csv=await getBlob().text();assert.match(csv,/010-0000-0000/);assert.ok(csv.includes("'=formula"));assert.match(csv,/기존 상태값/);d.querySelector('[data-select="one"]').click();await d.querySelector('#login').onclick();assert.equal(d.querySelector('#adminControls').hidden,true);assert.ok(d.querySelector('#list').textContent.includes('가상방문자'));assert.ok(!d.querySelector('#list').textContent.includes('1990-01-23'));assert.equal(d.querySelector('#mailBody').value,'');assert.equal(d.querySelectorAll('[data-select]').length,0);}finally{dom.window.close();}
 });
 test('status and search filters clear selections and map legacy statuses without rewriting data',async()=>{
  const {dom,d,login,change,records}=await setup();try{await login();d.querySelector('#selectAll').click();assert.equal(d.querySelectorAll('[data-select]:checked').length,3);d.querySelector('#selectAll').click();assert.equal(d.querySelectorAll('[data-select]:checked').length,0);d.querySelector('[data-select="one"]').click();change('statusFilter','승인 대기');assert.equal(d.querySelectorAll('[data-record]').length,2);assert.equal(d.querySelector('#selectedCount').textContent,'0명 선택 · 최대 10명');assert.match(d.querySelector('#list').textContent,/기존 전달 기록/);assert.equal(records()[0].status,'현장 제출');assert.equal(records()[1].status,'발주처 제출');change('statusFilter','승인 완료');assert.equal(d.querySelectorAll('[data-record]').length,1);}finally{dom.window.close();}
@@ -193,10 +194,10 @@ test('applicant can edit after administrator corrects visitor name without chang
 test('weekly unified roster keeps nine columns, masks others and preserves full administrator view',async()=>{
  const {dom,d,login,records}=await setup({own:true});try{
   assert.equal(d.querySelectorAll('thead th').length,9);assert.equal(d.querySelectorAll('[data-record]').length,3);assert.match(d.querySelector('#weekLabel').textContent,/2026-10-12 ~ 2026-10-18/);
-  const other=d.querySelector('[data-record="two"]');assert.match(other.textContent,/비공개/);assert.ok(!other.textContent.includes('010-0000-0000'));assert.match(d.querySelector('[data-record="one"]').textContent,/010-0000-0000/);
+  const other=d.querySelector('[data-record="two"]');assert.match(other.textContent,/19\*\*-\*\*-\*\*/);assert.ok(other.textContent.includes('010-0000-0000'));assert.ok(!other.textContent.includes('1990-01-23'));assert.match(d.querySelector('[data-record="one"]').textContent,/010-0000-0000/);
   records().push({...base,id:'spanning',visit_date:'2026-10-18',visit_end_date:'2026-10-20',status:'승인 대기'});await d.querySelector('#refresh').onclick();assert.ok(d.querySelector('[data-record="spanning"]'));
   d.querySelector('#weekNext').click();assert.ok(d.querySelector('[data-record="spanning"]'));assert.equal(d.querySelector('[data-record="one"]'),null);
-  d.querySelector('#weekCurrent').click();await login();assert.ok(!d.querySelector('[data-record="two"]').textContent.includes('비공개'));assert.equal(d.querySelectorAll('thead th').length,9);
+  d.querySelector('#weekCurrent').click();await login();assert.ok(d.querySelector('[data-record="two"]').textContent.includes('1990-01-23'));assert.equal(d.querySelectorAll('thead th').length,9);
  }finally{dom.window.close();}
 });
 

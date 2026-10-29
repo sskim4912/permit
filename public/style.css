@@ -95,3 +95,27 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
  #adminSettings .settings-content>button{display:block;width:100%;margin:0 0 10px}
  .table-wrap tr.inline-editor-row>td{text-align:left;padding:0 0 15px}
 }
+
+/* Balanced roster: selection beside number; compact dates and legible type. */
+.table-wrap table{table-layout:auto;font-size:16px}
+.table-wrap table th{font-size:15px;padding:15px 12px;white-space:normal}
+.table-wrap table td{font-size:16px;padding:17px 12px;line-height:1.65}
+.table-wrap table th:first-child{width:82px;min-width:82px}
+.table-wrap table th:nth-child(2){width:130px;min-width:115px}
+.table-wrap table th:nth-child(3){min-width:100px}
+.table-wrap table th:nth-child(4){width:130px;min-width:115px}
+.table-wrap table th:nth-child(5){width:160px;min-width:145px}
+.table-wrap table th:nth-child(6){min-width:115px}
+.table-wrap table th:nth-child(7),.table-wrap table th:nth-child(8),.table-wrap table th:nth-child(9){min-width:95px}
+.number-cell>.number-choice{display:inline-flex;align-items:center;justify-content:center;gap:10px;white-space:nowrap;min-height:28px}
+.number-cell .number-choice input{display:inline-block;flex:none;width:18px;height:18px;margin:0;vertical-align:middle}
+.record-info{font-size:14px}.record-info summary{font-size:13px}.record-info>div{font-size:14px}.record-info .row-actions button{font-size:13px}
+.list-panel .muted,.list-panel .list-note,.list-panel .owner-help{font-size:13px}
+@media(max-width:720px){
+ .table-wrap table{table-layout:auto}.table-wrap table th{min-width:0;width:auto}
+ .table-wrap table td{font-size:16px;padding:0;min-width:0;overflow-wrap:anywhere}
+ .table-wrap table td::before{font-size:12px;margin-bottom:7px}
+ .table-wrap tr:not(.inline-editor-row){gap:19px 14px;padding:18px 15px}
+ .number-choice{gap:12px}.record-info summary{font-size:14px}.record-info .row-actions button{font-size:14px}
+ .list-panel .list-note{font-size:12px}.table-wrap td[data-label="출입날짜"]{line-height:1.6}
+}
