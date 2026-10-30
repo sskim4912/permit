@@ -15,7 +15,7 @@ const selected=new Map();
 const canEdit=row=>admin||(row?.own&&['승인 대기','현장 제출'].includes(row.status)&&!row.delivery_at);
 const selectionLimit=()=>admin?10:5;
 const hasOwn=()=>rows.some(row=>row.own);
-const columnCount=()=>10;
+const columnCount=()=>11;
 const statusLabel=row=>row.status==='승인 완료'?'승인 완료':'승인 대기';
 const deliveryLabel=row=>row.delivery_at?new Date(row.delivery_at).toLocaleString('ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):row.status==='발주처 제출'?'기존 전달 기록':'전달 전';
 function toast(message){clearTimeout(toastTimer);$('toast').textContent=message;$('toast').style.display='block';toastTimer=setTimeout(()=>{$('toast').style.display='none';},4000);}
@@ -59,13 +59,13 @@ function matchesFilters(row){const [start,end]=weekRange();return (allWeeks||(ro
 let sortField='visit_date',sortDirection='desc';
 const nameCollator=new Intl.Collator('ko',{numeric:true,sensitivity:'base'});
 function sortRows(data){return data.sort((a,b)=>{
- const primary=sortField==='name'?nameCollator.compare(a.name||'',b.name||''):(a.visit_date||'').localeCompare(b.visit_date||'');
+ const primary=sortField!=='visit_date'?nameCollator.compare(a[sortField]||'',b[sortField]||''):(a.visit_date||'').localeCompare(b.visit_date||'');
  return primary*(sortDirection==='asc'?1:-1)||(b.created||'').localeCompare(a.created||'')||String(a.id).localeCompare(String(b.id));
 });}
 function visibleRows(){return sortRows(rows.filter(matchesFilters));}
 function renderSort(){
  for(const button of document.querySelectorAll('[data-sort]')){
-  const field=button.dataset.sort,active=field===sortField,label=field==='name'?'이름':'출입날짜';
+  const field=button.dataset.sort,active=field===sortField,label={name:'이름',gate:'출입위치',visit_date:'출입날짜'}[field];
   button.textContent=label+' '+(active?(sortDirection==='asc'?'▲':'▼'):'↕');button.classList.toggle('is-active',active);
   button.setAttribute('aria-label',label+' '+(active&&sortDirection==='asc'?'내림차순':'오름차순')+'으로 정렬');
  }
@@ -87,8 +87,8 @@ function render(){const focused=$('requestPanel').contains(document.activeElemen
  $('list').innerHTML=list.length?list.map((row,index)=>{
  const personal=admin||row.own, value=key=>key==='birth'&&!personal?esc(row.birth_mask||'****-**-**'):esc(row[key]||'—');
  const actions=canEdit(row)?`<div class="row-actions"><button type="button" class="edit-button" data-edit="${esc(row.id)}">수정</button><button type="button" class="row-delete danger" data-delete="${esc(row.id)}">삭제</button></div>`:`<small class="action-help">${row.own?'전달·승인 후에는 관리자에게 문의':'본인 신청만 가능'}</small>`;
- return `<tr data-record="${esc(row.id)}" class="${selected.has(row.id)?'selected':''}">${cell('순번',`<span class="number-choice"><span>${index+1}</span>${canEdit(row)?`<input type="checkbox" data-select="${esc(row.id)}" aria-label="${esc(row.name||'신청')} 선택" ${selected.has(row.id)?'checked':''}>`:''}</span>`,'number-cell')}${cell('출입날짜',esc(visitPeriod(row)))}${cell('이름',value('name')+`<details class="record-info"><summary>상세·관리</summary><div>요청팀: ${esc(row.team)}<br>목적: ${esc(row.purpose)}${personal?'<br>위치: '+esc(row.gate)+'<br>최초 신청자: '+esc(row.author_name||'기존 신청')+(row.modified_by?'<br>최근 수정: '+esc(row.modified_by)+' · '+esc(new Date(row.modified_at).toLocaleString('ko-KR')):''):''}${admin?'<br>발주처 전달: '+esc(deliveryLabel(row)):''}</div>${actions}</details>`)}${cell('생년월일',value('birth'))}${cell('휴대전화번호',value('phone'))}${cell('차량번호',value('plate'))}${cell('차종',value('vehicle_type'))}${cell('운전자 해당여부',value('role'))}${cell('방문목적',esc(row.purpose||'—'))}${cell('승인현황',`<span class="badge ${statusLabel(row)==='승인 완료'?'approved':''}">${statusLabel(row)}</span>`)}</tr>`;
- }).join(''):`<tr><td class="empty" colspan="10">해당 조건의 신청이 없습니다.</td></tr>`;
+ return `<tr data-record="${esc(row.id)}" class="${selected.has(row.id)?'selected':''}">${cell('순번',`<span class="number-choice"><span>${index+1}</span>${canEdit(row)?`<input type="checkbox" data-select="${esc(row.id)}" aria-label="${esc(row.name||'신청')} 선택" ${selected.has(row.id)?'checked':''}>`:''}</span>`,'number-cell')}${cell('출입날짜',esc(visitPeriod(row)))}${cell('이름',value('name')+`<details class="record-info"><summary>상세·관리</summary><div>요청팀: ${esc(row.team)}<br>목적: ${esc(row.purpose)}${personal?'<br>위치: '+esc(row.gate)+'<br>최초 신청자: '+esc(row.author_name||'기존 신청')+(row.modified_by?'<br>최근 수정: '+esc(row.modified_by)+' · '+esc(new Date(row.modified_at).toLocaleString('ko-KR')):''):''}${admin?'<br>발주처 전달: '+esc(deliveryLabel(row)):''}</div>${actions}</details>`)}${cell('생년월일',value('birth'))}${cell('휴대전화번호',value('phone'))}${cell('차량번호',value('plate'))}${cell('차종',value('vehicle_type'))}${cell('운전자 해당여부',value('role'))}${cell('방문목적',esc(row.purpose||'—'))}${cell('출입위치',esc(row.gate||'—'))}${cell('승인현황',`<span class="badge ${statusLabel(row)==='승인 완료'?'approved':''}">${statusLabel(row)}</span>`)}</tr>`;
+ }).join(''):`<tr><td class="empty" colspan="11">해당 조건의 신청이 없습니다.</td></tr>`;
  attachEditor();if(editing&&focused)focused.focus({preventScroll:true});updateSelection();}
 async function refresh(){const sequence=++refreshId;try{const session=await api('session');if(sequence!==refreshId)return;const wasAdmin=admin;admin=session.reviewer;if(wasAdmin&&!admin){selected.clear();if(editing)closeEditor();clearMail();}const data=await api('requests');if(sequence!==refreshId)return;rows=data;render();$('updated').textContent='최근 갱신 '+new Date().toLocaleTimeString('ko-KR');$('loadError').textContent='';}catch(e){if(sequence!==refreshId)return;rows=[];render();$('loadError').textContent='목록을 불러오지 못했습니다. '+e.message;}}
 function openEditor(item){if(!canEdit(item))return;if(!admin&&!actionActor([item])){toast($('adminError').textContent);return;}if(!editing)saveDraft();$('formHome').append($('requestPanel'));document.querySelectorAll('.inline-editor-row').forEach(row=>row.remove());editing={...item};setPeople([item]);$('formTitle').textContent='선택한 신청 수정';$('submit').textContent='수정 저장';$('cancelEdit').hidden=false;$('formError').textContent='';render();$('requestPanel').scrollIntoView?.({block:'nearest'});}
@@ -105,7 +105,7 @@ $('list').addEventListener('change',event=>{const checkbox=event.target.closest(
 $('list').onclick=async event=>{const remove=event.target.closest('[data-delete]');if(remove){const row=rows.find(row=>row.id===remove.dataset.delete);if(row&&canEdit(row))return requestDelete([row]);return;}const button=event.target.closest('[data-edit]');if(button){const item=rows.find(row=>row.id===button.dataset.edit);if(item)openEditor(item);}};
 $('selectAll').onchange=()=>{if(busy)return;const clear=selected.size>0;selected.clear();if(!clear)visibleRows().filter(canEdit).slice(0,selectionLimit()).forEach(row=>selected.set(row.id,{...row}));render();};
 document.querySelectorAll('[data-sort]').forEach(button=>button.onclick=()=>{
- const field=button.dataset.sort;if(sortField===field)sortDirection=sortDirection==='asc'?'desc':'asc';else{sortField=field;sortDirection=field==='name'?'asc':'desc';}render();
+ const field=button.dataset.sort;if(sortField===field)sortDirection=sortDirection==='asc'?'desc':'asc';else{sortField=field;sortDirection=field==='visit_date'?'desc':'asc';}render();
 });
 for(const id of ['statusFilter','dateFilter','search'])$(id).addEventListener(id==='search'?'input':'change',()=>{if(id==='dateFilter'&&$('dateFilter').value)setWeekFor($('dateFilter').value);selected.clear();render();});
 $('reviewer').addEventListener('input',()=>{$('reviewer').removeAttribute('aria-invalid');$('adminError').textContent='';});

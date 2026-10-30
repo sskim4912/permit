@@ -133,7 +133,7 @@ test('row deletion requires confirmation while author search remains available',
  }finally{dom.window.close();}
 });
 test('unowned requests cannot expose edit/delete actions or personal information',async()=>{
- const {dom,d}=await setup();try{assert.equal(d.querySelectorAll('thead th').length,10);assert.equal(d.querySelectorAll('[data-edit],[data-delete]').length,0);assert.equal(d.querySelector('#ownerHelp').hidden,false);assert.match(d.querySelector('#ownerHelp').textContent,/이전 신청/);}finally{dom.window.close();}
+ const {dom,d}=await setup();try{assert.equal(d.querySelectorAll('thead th').length,11);assert.equal(d.querySelectorAll('[data-edit],[data-delete]').length,0);assert.equal(d.querySelector('#ownerHelp').hidden,false);assert.match(d.querySelector('#ownerHelp').textContent,/이전 신청/);}finally{dom.window.close();}
 });
 
 test('site map toggles independently of applicant draft, list refresh and administrator mode',async()=>{
@@ -195,13 +195,13 @@ test('applicant can edit after administrator corrects visitor name without chang
  }finally{dom.window.close();}
 });
 
-test('weekly unified roster keeps ten columns, masks others and preserves full administrator view',async()=>{
+test('weekly unified roster keeps eleven columns, masks others and preserves full administrator view',async()=>{
  const {dom,d,login,records}=await setup({own:true});try{
-  assert.equal(d.querySelectorAll('thead th').length,10);assert.equal(d.querySelectorAll('[data-record]').length,3);assert.match(d.querySelector('#weekLabel').textContent,/2026-10-12 ~ 2026-10-18/);
+  assert.equal(d.querySelectorAll('thead th').length,11);assert.equal(d.querySelectorAll('[data-record]').length,3);assert.match(d.querySelector('#weekLabel').textContent,/2026-10-12 ~ 2026-10-18/);
   const other=d.querySelector('[data-record="two"]');assert.match(other.textContent,/19\*\*-\*\*-\*\*/);assert.ok(other.textContent.includes('010-0000-0000'));assert.ok(!other.textContent.includes('1990-01-23'));assert.match(d.querySelector('[data-record="one"]').textContent,/010-0000-0000/);
   records().push({...base,id:'spanning',visit_date:'2026-10-18',visit_end_date:'2026-10-20',status:'승인 대기'});await d.querySelector('#refresh').onclick();assert.ok(d.querySelector('[data-record="spanning"]'));
   d.querySelector('#weekNext').click();assert.ok(d.querySelector('[data-record="spanning"]'));assert.equal(d.querySelector('[data-record="one"]'),null);
-  d.querySelector('#weekCurrent').click();await login();assert.ok(d.querySelector('[data-record="two"]').textContent.includes('1990-01-23'));assert.equal(d.querySelectorAll('thead th').length,10);
+  d.querySelector('#weekCurrent').click();await login();assert.ok(d.querySelector('[data-record="two"]').textContent.includes('1990-01-23'));assert.equal(d.querySelectorAll('thead th').length,11);
  }finally{dom.window.close();}
 });
 
@@ -255,5 +255,15 @@ test('mail preview copies HTML plus plain fallback and downloads an unsent table
   await d.querySelector('#downloadMail').onclick();assert.match(await getBlob().text(),/X-Unsent: 1/);assert.equal(calls.length,0);
   Object.defineProperty(w.navigator,'clipboard',{configurable:true,value:{writeText:async text=>{copied=text;}}});w.ClipboardItem=undefined;await d.querySelector('#copyMail').onclick();assert.match(copied,/가상방문자/);assert.match(d.querySelector('#mailError').textContent,/텍스트로 복사/);
   await d.querySelector('#login').onclick();assert.equal(d.querySelector('#mailPreview').innerHTML,'');assert.equal(d.querySelector('#mailBody').value,'');
+ }finally{dom.window.close();}
+});
+
+test('gate column sorts ascending and descending on desktop and mobile without losing selection',async()=>{
+ const {dom,d,login,records}=await setup();try{
+  await login();records()[0].gate='정문';records()[1].gate='서문';records()[2].gate='정문';await d.querySelector('#refresh').onclick();
+  d.querySelector('[data-select=one]').click();d.querySelector('thead [data-sort=gate]').click();const gates=()=>[...d.querySelectorAll('[data-record] [data-label=출입위치]')].map(x=>x.textContent);
+  assert.deepEqual(gates(),['서문','정문','정문']);assert.equal(d.querySelector('[data-sort-heading=gate]').getAttribute('aria-sort'),'ascending');
+  d.querySelector('.mobile-sort [data-sort=gate]').click();assert.deepEqual(gates(),['정문','정문','서문']);assert.equal(d.querySelector('[data-select=one]').checked,true);assert.equal(d.querySelector('[data-sort-heading=gate]').getAttribute('aria-sort'),'descending');
+  const headings=[...d.querySelectorAll('thead th')].map(x=>x.textContent);assert.ok(headings[8].includes('방문목적'));assert.ok(headings[9].includes('출입위치'));assert.ok(headings[10].includes('승인현황'));
  }finally{dom.window.close();}
 });
