@@ -24,9 +24,8 @@ service cloud.firestore {
         && d.status in ['승인 대기','현장 제출','현장 확인','발주처 제출','승인 완료']
         && d.reviewer is string && d.reviewer.size() <= 50
         && (!('lunch' in d) || d.lunch in ['중식신청','미신청'])
-        && (!('gaisu_requested' in d) || validStamp(d.gaisu_requested))
-        && (!('gaisu_approved' in d) || validStamp(d.gaisu_approved))
-        && (!('final_approved' in d) || (validStamp(d.final_approved) && d.status == '승인 완료'))
+        // New stamps are validated in keepStages; existing stamps must remain identical.
+        && (!('final_approved' in d) || d.status == '승인 완료')
         && d.version is int && d.created is timestamp;
     }
     function publicData(d) {
