@@ -46,6 +46,9 @@ jobs:
           output = re.sub(r'\x1b\[[0-9;]*m', '', output)
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
               summary.write('### Firebase emulator test results\n<pre>' + html.escape(output[-18000:]) + '</pre>\n')
+          if 'test_status' not in os.environ and ('failing tests:' in output or 'Error:' in output):
+              diagnostic = output[-12000:].replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+              print('::error title=Firebase test diagnostics::' + diagnostic)
           PYTHON
           exit "$test_status"
         env:
