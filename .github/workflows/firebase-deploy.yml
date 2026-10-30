@@ -32,7 +32,22 @@ jobs:
       - run: npm run test:ui
       - run: node --test tests/hosting.test.js
       - name: Test Firebase authentication and Firestore rules locally
-        run: npm test
+        shell: bash
+        run: |
+          set +e
+          npm test > /tmp/firebase-test-output.log 2>&1
+          test_status=$?
+          set -e
+          cat /tmp/firebase-test-output.log
+          python3 - <<'PYTHON'
+          import html, os, re
+          from pathlib import Path
+          output = Path('/tmp/firebase-test-output.log').read_text(errors='replace')
+          output = re.sub(r'\x1b\[[0-9;]*m', '', output)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('### Firebase emulator test results\n<pre>' + html.escape(output[-18000:]) + '</pre>\n')
+          PYTHON
+          exit "$test_status"
         env:
           FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true'
       - name: Stamp deployment commit
