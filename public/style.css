@@ -139,3 +139,9 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
 
 .table-wrap th .number-choice{display:inline-flex;gap:9px;align-items:center;justify-content:center}
 .table-wrap th .number-choice input{flex:none;display:inline-block;width:18px;height:18px;margin:0;vertical-align:middle;cursor:pointer}
+
+/* Purpose and approval replace the shoe column only in the on-screen roster. */
+.table-wrap table th:nth-child(9){min-width:145px}.table-wrap table th:nth-child(10){min-width:105px}
+.table-wrap td[data-label="방문목적"]{overflow-wrap:anywhere;word-break:keep-all}
+.table-wrap td[data-label="승인현황"] .badge{font-size:13px;padding:6px 11px}
+@media(max-width:720px){.table-wrap table th:nth-child(9),.table-wrap table th:nth-child(10){min-width:0}.table-wrap td[data-label="방문목적"]{grid-column:1/-1}.table-wrap td[data-label="승인현황"] .badge{font-size:14px}}

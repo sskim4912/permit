@@ -132,7 +132,7 @@ test('row deletion requires confirmation while author search remains available',
  }finally{dom.window.close();}
 });
 test('unowned requests cannot expose edit/delete actions or personal information',async()=>{
- const {dom,d}=await setup();try{assert.equal(d.querySelectorAll('thead th').length,9);assert.equal(d.querySelectorAll('[data-edit],[data-delete]').length,0);assert.equal(d.querySelector('#ownerHelp').hidden,false);assert.match(d.querySelector('#ownerHelp').textContent,/이전 신청/);}finally{dom.window.close();}
+ const {dom,d}=await setup();try{assert.equal(d.querySelectorAll('thead th').length,10);assert.equal(d.querySelectorAll('[data-edit],[data-delete]').length,0);assert.equal(d.querySelector('#ownerHelp').hidden,false);assert.match(d.querySelector('#ownerHelp').textContent,/이전 신청/);}finally{dom.window.close();}
 });
 
 test('site map toggles independently of applicant draft, list refresh and administrator mode',async()=>{
@@ -194,13 +194,13 @@ test('applicant can edit after administrator corrects visitor name without chang
  }finally{dom.window.close();}
 });
 
-test('weekly unified roster keeps nine columns, masks others and preserves full administrator view',async()=>{
+test('weekly unified roster keeps ten columns, masks others and preserves full administrator view',async()=>{
  const {dom,d,login,records}=await setup({own:true});try{
-  assert.equal(d.querySelectorAll('thead th').length,9);assert.equal(d.querySelectorAll('[data-record]').length,3);assert.match(d.querySelector('#weekLabel').textContent,/2026-10-12 ~ 2026-10-18/);
+  assert.equal(d.querySelectorAll('thead th').length,10);assert.equal(d.querySelectorAll('[data-record]').length,3);assert.match(d.querySelector('#weekLabel').textContent,/2026-10-12 ~ 2026-10-18/);
   const other=d.querySelector('[data-record="two"]');assert.match(other.textContent,/19\*\*-\*\*-\*\*/);assert.ok(other.textContent.includes('010-0000-0000'));assert.ok(!other.textContent.includes('1990-01-23'));assert.match(d.querySelector('[data-record="one"]').textContent,/010-0000-0000/);
   records().push({...base,id:'spanning',visit_date:'2026-10-18',visit_end_date:'2026-10-20',status:'승인 대기'});await d.querySelector('#refresh').onclick();assert.ok(d.querySelector('[data-record="spanning"]'));
   d.querySelector('#weekNext').click();assert.ok(d.querySelector('[data-record="spanning"]'));assert.equal(d.querySelector('[data-record="one"]'),null);
-  d.querySelector('#weekCurrent').click();await login();assert.ok(d.querySelector('[data-record="two"]').textContent.includes('1990-01-23'));assert.equal(d.querySelectorAll('thead th').length,9);
+  d.querySelector('#weekCurrent').click();await login();assert.ok(d.querySelector('[data-record="two"]').textContent.includes('1990-01-23'));assert.equal(d.querySelectorAll('thead th').length,10);
  }finally{dom.window.close();}
 });
 
@@ -232,5 +232,14 @@ test('header checkbox selects visible eligible records, supports mixed state, an
   assert.equal(d.querySelector('#selectAll').hidden,true);await login();const header=d.querySelector('thead #selectAll');assert.equal(header.hidden,false);assert.equal(d.querySelector('.bulk-toolbar input[type=checkbox]'),null);
   header.click();assert.equal(d.querySelectorAll('[data-select]:checked').length,3);assert.equal(header.checked,true);header.click();assert.equal(d.querySelectorAll('[data-select]:checked').length,0);
   d.querySelector('[data-select=one]').click();assert.equal(header.indeterminate,true);header.click();assert.equal(d.querySelectorAll('[data-select]:checked').length,0);
+ }finally{dom.window.close();}
+});
+
+test('roster displays purpose and approval status instead of shoes; approval remains admin-only',async()=>{
+ const {dom,d,login,calls}=await setup({own:true});try{
+  const headers=[...d.querySelectorAll('thead th')].map(x=>x.textContent.trim());assert.ok(headers.includes('방문목적'));assert.ok(headers.includes('승인현황'));assert.ok(!headers.includes('안전화'));
+  assert.equal(d.querySelector('[data-record="one"] [data-label="방문목적"]').textContent,'회의');assert.match(d.querySelector('[data-record="one"] [data-label="승인현황"]').textContent,/승인 대기/);
+  assert.equal(d.querySelector('#approve').hidden,true);await d.querySelector('#approve').onclick();assert.equal(calls.length,0);
+  await login();d.querySelector('#reviewer').value='승인 담당자';d.querySelector('[data-select="one"]').click();await d.querySelector('#approve').onclick();assert.equal(calls[0].data.action,'approve');assert.match(d.querySelector('[data-record="one"] [data-label="승인현황"]').textContent,/승인 완료/);
  }finally{dom.window.close();}
 });
