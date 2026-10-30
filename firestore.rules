@@ -78,7 +78,7 @@ service cloud.firestore {
         && request.resource.data.version == 1
         && request.resource.data.created == request.time
         && matchesPublic(request.resource.data,getAfter(/databases/$(database)/documents/publicRequests/$(id)).data);
-      allow update: if (isAdmin() || ownerChange(resource.data,request.resource.data) || ownerStage(resource.data,request.resource.data)) && valid(request.resource.data)
+      allow update: if (isAdmin() || ownerStage(resource.data,request.resource.data) || ownerChange(resource.data,request.resource.data)) && valid(request.resource.data)
         && keepAuthor(resource.data,request.resource.data)
         && keepStages(resource.data,request.resource.data)
         && (!('visit_end_date' in resource.data) || ('visit_end_date' in request.resource.data))
