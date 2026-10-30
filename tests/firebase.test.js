@@ -176,3 +176,28 @@ test('public roster masks birth on server and administrator safely upgrades lega
   const after=(await getDoc(doc(adminDb,'requests',mine.id))).data();assert.equal(after.birth,original.birth);assert.equal(after.version,original.version);assert.equal(after.owner_key,original.owner_key);await service.api('logout',{});
  }finally{await deleteApp(owner.app);}
 });
+
+test('lunch and approval stages enforce owner/admin rights, server audit times, conflict checks and immutable history',async()=>{
+ const config={apiKey:'demo-key',projectId:project};const owner=createPermitAPI({config,emulator:true,name:'stage-owner',ownerKey:'e'.repeat(64)}),stranger=createPermitAPI({config,emulator:true,name:'stage-stranger',ownerKey:'f'.repeat(64)});
+ try{
+  await assert.rejects(()=>owner.api('requests',{author_name:'단계 신청자',items:[{...item,lunch:'잘못된 선택'}]}),/중식/);
+  await owner.api('requests',{author_name:'단계 신청자',items:[{...item,name:'단계 검증',lunch:'중식신청'}]});let mine=(await owner.api('requests')).find(r=>r.own);assert.equal(mine.lunch,'중식신청');
+  await assert.rejects(()=>stranger.api('approval',{id:mine.id,version:mine.version,stage:'gaisu_requested'}),/본인/);
+  await assert.rejects(()=>owner.api('approval',{id:mine.id,version:mine.version,stage:'final_approved'}),/관리자/);
+  await owner.api('approval',{id:mine.id,version:mine.version,stage:'gaisu_requested',reviewer:'무시할 이름',at:'2000-01-01'});let changed=(await owner.api('requests')).find(r=>r.id===mine.id);assert.equal(changed.gaisu_requested.by,'단계 신청자');assert.ok(changed.gaisu_requested.at);assert.notEqual(changed.gaisu_requested.at,'2000-01-01');
+  await assert.rejects(()=>owner.api('approval',{id:mine.id,version:mine.version,stage:'gaisu_approved'}),/변경/);
+  await assert.rejects(()=>owner.api('approval',{id:changed.id,version:changed.version,stage:'gaisu_requested'}),/이미/);
+  const adminDb=env.authenticatedContext(ADMIN_UID).firestore(),publicDb=env.unauthenticatedContext().firestore();let original=(await getDoc(doc(adminDb,'requests',mine.id))).data();
+  async function forge(overrides){const record={...original,version:original.version+1,modified_by:original.author_name,modified_at:serverTimestamp(),...overrides};const batch=writeBatch(publicDb);batch.set(doc(publicDb,'requests',mine.id),record);batch.set(doc(publicDb,'publicRequests',mine.id),pub(record));batch.set(doc(publicDb,'applicantCopies','e'.repeat(64),'items',mine.id),record);return batch.commit();}
+  await assertFails(forge({gaisu_approved:{by:'다른 이름',at:serverTimestamp()}}));await assertFails(forge({final_approved:{by:'단계 신청자',at:serverTimestamp()},status:'승인 완료'}));
+  const {gaisu_requested,...removed}=original;await assertFails(forge({...removed,gaisu_requested:null}));
+  await owner.api('owner-update',{...changed,lunch:'미신청',purpose:'중식 변경',reviewer:'단계 신청자'});changed=(await owner.api('requests')).find(r=>r.id===mine.id);assert.equal(changed.lunch,'미신청');assert.deepEqual(changed.gaisu_requested,{by:gaisu_requested.by,at:gaisu_requested.at.toDate().toISOString()});
+  await service.api('login',{password:'test-only-password'});await service.api('bulk',{action:'delivered',items:[changed],reviewer:'발송 담당자'});changed=(await owner.api('requests')).find(r=>r.id===mine.id);
+  await owner.api('approval',{id:changed.id,version:changed.version,stage:'gaisu_approved'});changed=(await owner.api('requests')).find(r=>r.id===mine.id);assert.equal(changed.gaisu_approved.by,'단계 신청자');
+  await assert.rejects(()=>service.api('approval',{id:changed.id,version:changed.version,stage:'final_approved',reviewer:''}),/이름/);
+  await service.api('approval',{id:changed.id,version:changed.version,stage:'final_approved',reviewer:'최종 담당자'});changed=(await owner.api('requests')).find(r=>r.id===mine.id);assert.equal(changed.status,'승인 완료');assert.equal(changed.final_approved.by,'최종 담당자');assert.ok(changed.final_approved.at);
+  const publicRow=(await stranger.api('requests')).find(r=>r.id===mine.id);assert.equal(publicRow.final_approved.by,'최종 담당자');assert.equal(publicRow.lunch,'미신청');assert.equal(publicRow.owner_key,undefined);assert.equal(publicRow.birth,undefined);
+  original=(await getDoc(doc(adminDb,'requests',mine.id))).data();await assertFails(forge({final_approved:{by:'위조',at:serverTimestamp()}}));
+  await service.api('logout',{});
+ }finally{await deleteApp(owner.app);await deleteApp(stranger.app);}
+});

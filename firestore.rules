@@ -7,7 +7,7 @@ service cloud.firestore {
     function text(value) { return value is string && value.size() <= 200; }
     function valid(d) {
       return d.keys().hasAll(['visit_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team','status','reviewer','version','created'])
-        && d.keys().hasOnly(['visit_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team','status','reviewer','version','created','delivery_at','visit_end_date','author_name','owner_key','modified_by','modified_at'])
+        && d.keys().hasOnly(['visit_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team','status','reviewer','version','created','delivery_at','visit_end_date','author_name','owner_key','modified_by','modified_at','lunch','gaisu_requested','gaisu_approved','final_approved'])
         && (!('delivery_at' in d) || (d.delivery_at is timestamp && d.delivery_at <= request.time))
         && ((!('author_name' in d) && !('owner_key' in d)) || (d.author_name is string && d.author_name.size() > 0 && d.author_name.size() <= 50 && d.owner_key is string && d.owner_key.matches('^[a-f0-9]{64}$')))
         && ((!('modified_by' in d) && !('modified_at' in d)) || (d.modified_by is string && d.modified_by.size() > 0 && d.modified_by.size() <= 50 && d.modified_at is timestamp && d.modified_at <= request.time))
@@ -23,13 +23,36 @@ service cloud.firestore {
         && d.shoes in ['필요없음','230','235','240','245','250','255','260','265','270','275','280','285','290','295','300']
         && d.status in ['승인 대기','현장 제출','현장 확인','발주처 제출','승인 완료']
         && d.reviewer is string && d.reviewer.size() <= 50
+        && (!('lunch' in d) || d.lunch in ['중식신청','미신청'])
+        && (!('gaisu_requested' in d) || validStamp(d.gaisu_requested))
+        && (!('gaisu_approved' in d) || validStamp(d.gaisu_approved))
+        && (!('final_approved' in d) || (validStamp(d.final_approved) && d.status == '승인 완료'))
         && d.version is int && d.created is timestamp;
     }
     function publicData(d) {
       return ('visit_end_date' in d) ? {'visit_date':d.visit_date,'visit_end_date':d.visit_end_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':d.reviewer,'version':d.version,'created':d.created} : {'visit_date':d.visit_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':d.reviewer,'version':d.version,'created':d.created};
     }
-    function rosterData(d) { return ('visit_end_date' in d) ? {'visit_date':d.visit_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':d.reviewer,'version':d.version,'created':d.created,'name':d.name,'phone':d.phone,'plate':d.plate,'vehicle_type':d.vehicle_type,'vehicle_name':d.vehicle_name,'role':d.role,'shoes':d.shoes,'gate':d.gate,'birth_mask':(d.birth.matches('^19.*')?'19**-**-**':d.birth.matches('^20.*')?'20**-**-**':'****-**-**'),'visit_end_date':d.visit_end_date} : {'visit_date':d.visit_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':d.reviewer,'version':d.version,'created':d.created,'name':d.name,'phone':d.phone,'plate':d.plate,'vehicle_type':d.vehicle_type,'vehicle_name':d.vehicle_name,'role':d.role,'shoes':d.shoes,'gate':d.gate,'birth_mask':(d.birth.matches('^19.*')?'19**-**-**':d.birth.matches('^20.*')?'20**-**-**':'****-**-**')}; }
-    function matchesPublic(d,p) { return p == publicData(d) || p == rosterData(d); }
+    function previousRosterData(d) { return ('visit_end_date' in d) ? {'visit_date':d.visit_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':d.reviewer,'version':d.version,'created':d.created,'name':d.name,'phone':d.phone,'plate':d.plate,'vehicle_type':d.vehicle_type,'vehicle_name':d.vehicle_name,'role':d.role,'shoes':d.shoes,'gate':d.gate,'birth_mask':(d.birth.matches('^19.*')?'19**-**-**':d.birth.matches('^20.*')?'20**-**-**':'****-**-**'),'visit_end_date':d.visit_end_date} : {'visit_date':d.visit_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':d.reviewer,'version':d.version,'created':d.created,'name':d.name,'phone':d.phone,'plate':d.plate,'vehicle_type':d.vehicle_type,'vehicle_name':d.vehicle_name,'role':d.role,'shoes':d.shoes,'gate':d.gate,'birth_mask':(d.birth.matches('^19.*')?'19**-**-**':d.birth.matches('^20.*')?'20**-**-**':'****-**-**')}; }
+    function rosterData(d) { return ('visit_end_date' in d) ? {'visit_date':d.visit_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':d.reviewer,'version':d.version,'created':d.created,'name':d.name,'phone':d.phone,'plate':d.plate,'vehicle_type':d.vehicle_type,'vehicle_name':d.vehicle_name,'role':d.role,'shoes':d.shoes,'gate':d.gate,'lunch':d.get('lunch',''),'gaisu_requested':d.get('gaisu_requested',null),'gaisu_approved':d.get('gaisu_approved',null),'final_approved':d.get('final_approved',null),'birth_mask':(d.birth.matches('^19.*')?'19**-**-**':d.birth.matches('^20.*')?'20**-**-**':'****-**-**'),'visit_end_date':d.visit_end_date} : {'visit_date':d.visit_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':d.reviewer,'version':d.version,'created':d.created,'name':d.name,'phone':d.phone,'plate':d.plate,'vehicle_type':d.vehicle_type,'vehicle_name':d.vehicle_name,'role':d.role,'shoes':d.shoes,'gate':d.gate,'lunch':d.get('lunch',''),'gaisu_requested':d.get('gaisu_requested',null),'gaisu_approved':d.get('gaisu_approved',null),'final_approved':d.get('final_approved',null),'birth_mask':(d.birth.matches('^19.*')?'19**-**-**':d.birth.matches('^20.*')?'20**-**-**':'****-**-**')}; }
+    function matchesPublic(d,p) { return p == publicData(d) || p == previousRosterData(d) || p == rosterData(d); }
+    function validStamp(stamp) {
+      return stamp is map && stamp.keys().hasAll(['by','at']) && stamp.keys().hasOnly(['by','at'])
+        && stamp.by is string && stamp.by.size() > 0 && stamp.by.size() <= 50 && stamp.at is timestamp && stamp.at <= request.time;
+    }
+    function keepStage(before, after, key, actor) {
+      return (key in before) ? ((key in after) && after[key] == before[key])
+        : (!(key in after) || (validStamp(after[key]) && after[key].by == actor && after[key].at == request.time));
+    }
+    function keepStages(before, after) {
+      let actor = isAdmin() ? after.reviewer : before.get('author_name','');
+      return keepStage(before,after,'gaisu_requested',actor) && keepStage(before,after,'gaisu_approved',actor)
+        && keepStage(before,after,'final_approved',actor) && (isAdmin() || before.get('final_approved',null) == after.get('final_approved',null));
+    }
+    function ownerStage(before, after) {
+      return ('owner_key' in before) && after.owner_key == before.owner_key && before.status != '승인 완료' && !('final_approved' in before)
+        && after.diff(before).affectedKeys().hasOnly(['gaisu_requested','gaisu_approved','version','modified_by','modified_at'])
+        && after.modified_by == before.author_name && after.modified_at == request.time;
+    }
     function pending(d) { return d.status in ['승인 대기','현장 제출'] && !('delivery_at' in d); }
     function keepAuthor(before, after) {
       return (!('author_name' in before) || after.author_name == before.author_name)
@@ -37,7 +60,7 @@ service cloud.firestore {
     }
     function ownerChange(before, after) {
       return ('owner_key' in before) && pending(before) && after.owner_key == before.owner_key
-        && after.diff(before).affectedKeys().hasOnly(['visit_date','visit_end_date','purpose','team','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','version','modified_by','modified_at'])
+        && after.diff(before).affectedKeys().hasOnly(['visit_date','visit_end_date','purpose','team','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','lunch','version','modified_by','modified_at'])
         && after.modified_by == before.author_name && after.modified_at == request.time;
     }
     function deletedLog(id, before) {
@@ -47,6 +70,7 @@ service cloud.firestore {
     match /requests/{id} {
       allow read: if isAdmin();
       allow create: if valid(request.resource.data)
+        && !request.resource.data.keys().hasAny(['gaisu_requested','gaisu_approved','final_approved'])
         && request.resource.data.status in ['승인 대기','현장 제출']
         && !('delivery_at' in request.resource.data)
         && !('modified_at' in request.resource.data)
@@ -54,8 +78,9 @@ service cloud.firestore {
         && request.resource.data.version == 1
         && request.resource.data.created == request.time
         && matchesPublic(request.resource.data,getAfter(/databases/$(database)/documents/publicRequests/$(id)).data);
-      allow update: if (isAdmin() || ownerChange(resource.data,request.resource.data)) && valid(request.resource.data)
+      allow update: if (isAdmin() || ownerChange(resource.data,request.resource.data) || ownerStage(resource.data,request.resource.data)) && valid(request.resource.data)
         && keepAuthor(resource.data,request.resource.data)
+        && keepStages(resource.data,request.resource.data)
         && (!('visit_end_date' in resource.data) || ('visit_end_date' in request.resource.data))
         && (!('delivery_at' in resource.data) || ('delivery_at' in request.resource.data))
         && (isAdmin() ? request.resource.data.reviewer.size() > 0 : request.resource.data.modified_by.size() > 0)

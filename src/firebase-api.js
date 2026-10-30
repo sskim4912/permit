@@ -27,10 +27,12 @@ function payload(item) {
   if(result.visit_end_date<result.visit_date)throw Error('방문종료일은 방문시작일과 같거나 이후여야 합니다.');
   if(['purpose','team','name','phone'].some(k=>!result[k])||Object.values(result).some(v=>v.length>200))throw Error('필수 항목을 입력하고 항목당 200자 이하로 작성해 주세요.');
   if(!['서문','정문'].includes(result.gate)||!['운전자','동승자','도보'].includes(result.role)||!['필요없음',...Array.from({length:15},(_,i)=>String(230+i*5))].includes(result.shoes))throw Error('출입위치, 탑승 구분, 안전화를 확인해 주세요.');
+  if('lunch' in item){if(!['중식신청','미신청'].includes(item.lunch))throw Error('중식 신청 또는 미신청을 선택해 주세요.');result.lunch=item.lunch;}
   return result;
 }
 const summary=publicRoster;
-const serialize=snapshot=>({id:snapshot.id,...snapshot.data(),created:snapshot.data().created?.toDate?.().toISOString()||'',...(snapshot.data().modified_at?{modified_at:snapshot.data().modified_at.toDate().toISOString()}:{}),...(snapshot.data().delivery_at?{delivery_at:snapshot.data().delivery_at.toDate().toISOString()}:{})});
+const APPROVAL_KEYS=['gaisu_requested','gaisu_approved','final_approved'];
+const serialize=snapshot=>({id:snapshot.id,...snapshot.data(),...Object.fromEntries(APPROVAL_KEYS.filter(k=>snapshot.data()[k]).map(k=>[k,{...snapshot.data()[k],at:snapshot.data()[k].at?.toDate?.().toISOString()||snapshot.data()[k].at}])),created:snapshot.data().created?.toDate?.().toISOString()||'',...(snapshot.data().modified_at?{modified_at:snapshot.data().modified_at.toDate().toISOString()}:{}),...(snapshot.data().delivery_at?{delivery_at:snapshot.data().delivery_at.toDate().toISOString()}:{})});
 export function createPermitAPI({config=firebaseConfig, emulator=false, name='permit',ownerKey=null}={}) {
   const app=initializeApp(config,name),auth=getAuth(app),db=getFirestore(app);
   if(emulator){connectAuthEmulator(auth,'http://127.0.0.1:9099',{disableWarnings:true});connectFirestoreEmulator(db,'127.0.0.1',8080);}
@@ -73,7 +75,7 @@ export function createPermitAPI({config=firebaseConfig, emulator=false, name='pe
       const snapshot=await getDocs(collection(db,isAdmin()?'requests':'publicRequests'));
       if(isAdmin()){
         const published=await getDocs(collection(db,'publicRequests')),byId=new Map(published.docs.map(d=>[d.id,d.data()]));
-        const equal=(a,b)=>{const keys=Object.keys(a);return b&&keys.length===Object.keys(b).length&&keys.every(k=>a[k]?.isEqual?a[k].isEqual(b[k]):a[k]===b[k]);};
+        const equal=(a,b)=>{if(a===b)return true;if(a?.isEqual)return a.isEqual(b);if(!a||!b||typeof a!=='object'||typeof b!=='object')return false;const keys=Object.keys(a);return keys.length===Object.keys(b).length&&keys.every(k=>equal(a[k],b[k]));};
         const stale=snapshot.docs.filter(d=>!equal(summary(d.data()),byId.get(d.id)));
         for(let offset=0;offset<stale.length;offset+=10){
           const chunk=stale.slice(offset,offset+10);
@@ -114,6 +116,25 @@ export function createPermitAPI({config=firebaseConfig, emulator=false, name='pe
         snapshots.forEach(s=>erase(transaction,doc(db,'requests',s.id),s.data(),s.data().author_name));
       });return {count:data.items.length};
     }
+    if(path==='approval'){
+      if(!APPROVAL_KEYS.includes(data.stage))throw Error('승인 단계를 확인해 주세요.');
+      const administrator=isAdmin(),key=administrator?null:browserKey();
+      if(data.stage==='final_approved'&&!administrator)throw Error('최종 승인은 관리자만 처리할 수 있습니다.');
+      if(!administrator&&!key)throw Error('신청한 브라우저에서 본인 신청만 처리할 수 있습니다.');
+      const reference=doc(db,'requests',String(data.id));
+      await runTransaction(db,async transaction=>{
+        const snapshot=await transaction.get(administrator?reference:copyRef(key,reference.id));
+        if(!snapshot.exists())throw Error('본인 신청을 찾을 수 없습니다.');const before=snapshot.data();
+        if(before.version!==data.version)throw Error('신청이 변경되었습니다. 새로고침 후 다시 처리해 주세요.');
+        if(before[data.stage]||(data.stage==='final_approved'&&before.status==='승인 완료'))throw Error('이미 처리된 단계입니다.');
+        if(!administrator&&(before.owner_key!==key||before.status==='승인 완료'||before.final_approved))throw Error('본인 신청만 처리할 수 있으며 최종 승인 후에는 관리자에게 요청해 주세요.');
+        const actor=personName(administrator?data.reviewer:before.author_name);
+        const record={...before,[data.stage]:{by:actor,at:serverTimestamp()},modified_by:actor,modified_at:serverTimestamp(),version:before.version+1};
+        if(administrator)record.reviewer=actor;
+        if(data.stage==='final_approved')record.status='승인 완료';
+        transaction.set(reference,record);transaction.set(doc(db,'publicRequests',reference.id),summary(record));mirror(transaction,reference,record);
+      });return {};
+    }
     if(path==='bulk'){
       requireAdmin();
       if(!['approve','delete','delivered'].includes(data.action))throw Error('처리 방법을 확인해 주세요.');
@@ -131,7 +152,7 @@ export function createPermitAPI({config=firebaseConfig, emulator=false, name='pe
           const before=snapshots[index].data(),reference=references[index],publicRef=doc(db,'publicRequests',reference.id);
           if(data.action==='delete'){erase(transaction,reference,before,reviewer);continue;}
           const record={...before,reviewer,version:before.version+1};
-          if(data.action==='approve')record.status='승인 완료';
+          if(data.action==='approve'){record.status='승인 완료';if(before.status!=='승인 완료'&&!before.final_approved)record.final_approved={by:reviewer,at:serverTimestamp()};}
           if(data.action==='delivered')record.delivery_at=serverTimestamp();
           transaction.set(reference,record);transaction.set(publicRef,summary(record));mirror(transaction,reference,record);
         }

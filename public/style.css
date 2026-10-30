@@ -153,3 +153,11 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
 
 .table-wrap table th:nth-child(10){min-width:120px}.table-wrap table th:nth-child(11){min-width:105px}
 @media(max-width:720px){.table-wrap table th:nth-child(10),.table-wrap table th:nth-child(11){min-width:0}.mobile-sort{gap:6px}.mobile-sort button{padding:9px 10px}}
+
+/* Lunch and independently recorded approval stages. */
+.table-wrap table th:nth-child(11),.table-wrap table th:nth-child(12),.table-wrap table th:nth-child(13){min-width:150px}
+.table-wrap table th:nth-child(14){min-width:170px}
+.approval-record{display:flex;justify-content:center;align-items:center;gap:9px}.approval-record input{width:20px;height:20px;flex:none;margin:0;accent-color:#117b61;cursor:pointer}.approval-record input:disabled{cursor:default}
+.approval-record>span{display:grid;gap:3px;text-align:center;max-width:115px;overflow-wrap:anywhere}.approval-record strong{font-size:13px;color:#2c5b43}.approval-record time,.approval-record small{font-size:12px;color:#6a7f72;line-height:1.5}
+@media(max-width:720px){.table-wrap table th:nth-child(n+11){min-width:0}.table-wrap td.approval-cell{grid-column:1/-1;background:#f2f7f4;border-radius:7px;padding:12px}.approval-record{gap:14px}.approval-record>span{max-width:none}.approval-record strong{font-size:14px}.approval-record time,.approval-record small{font-size:13px}.mobile-sort{gap:6px}.mobile-sort button{padding:9px 8px}}
+.meal-hint{font-size:11px;line-height:1.5;margin-top:5px;color:#6c8276}
