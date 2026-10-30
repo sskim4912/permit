@@ -49,7 +49,7 @@ jobs:
           if sys.argv[1] != '0':
               marker = output.rfind('failing tests:')
               debug = Path('firestore-debug.log').read_text() if Path('firestore-debug.log').exists() else ''
-              diagnostic = output[output.rfind('failing tests:'):] + '\nRULE DETAILS:\n' + debug[-2400:]
+              diagnostic = output[output.rfind('failing tests:'):] + '\nRULE DETAILS:\n' + '\n'.join(line for line in debug.splitlines() if not line.lstrip().startswith(('at ', '...'))) [-2400:]
               diagnostic = diagnostic[-3500:].replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
               print('::error title=Firebase test failure details::' + diagnostic)
           PYTHON
