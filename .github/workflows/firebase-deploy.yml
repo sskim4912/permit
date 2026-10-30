@@ -48,7 +48,8 @@ jobs:
               summary.write('### Firebase emulator test results\n<pre>' + html.escape(output[-18000:]) + '</pre>\n')
           if sys.argv[1] != '0':
               marker = output.rfind('failing tests:')
-              diagnostic = output[-3500:]
+              debug = Path('firestore-debug.log').read_text() if Path('firestore-debug.log').exists() else ''
+              diagnostic = output[output.rfind('failing tests:'):] + '\nRULE DETAILS:\n' + debug[-2400:]
               diagnostic = diagnostic[-3500:].replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
               print('::error title=Firebase test failure details::' + diagnostic)
           PYTHON
