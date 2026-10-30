@@ -6,7 +6,7 @@ const rows=[{visit_date:'2026-11-05',visit_end_date:'2026-11-06',name:'<img src=
 test('email renders nine-column summary table and escaped request content without capability keys',()=>{
  const message=buildMailDocument(rows,'담당자 <가상>');const dom=new JSDOM(message.html);try{
   assert.equal(dom.window.document.querySelectorAll('th').length,9);assert.equal(dom.window.document.querySelectorAll('tbody tr').length,1);assert.equal(dom.window.document.querySelector('img'),null);
-  assert.ok(dom.window.document.body.textContent.includes(rows[0].name));assert.ok(dom.window.document.body.textContent.includes('협의 & 점검'));assert.ok(message.html.includes('2026-11-05 ~ 2026-11-06'));assert.ok(!message.html.includes('never-export-this'));assert.ok(!message.html.includes('안전화'));assert.ok(!message.html.includes('승인현황'));assert.match(message.text,/방문종료일: 2026-11-06/);
+  assert.ok(dom.window.document.body.textContent.includes(rows[0].name));assert.ok(dom.window.document.body.textContent.includes('협의 & 점검'));assert.ok(message.html.includes('2026-11-05 ~ 2026-11-06'));assert.ok(!message.html.includes('never-export-this'));assert.ok(!message.html.includes('안전화'));assert.ok(!message.html.includes('승인현황'));assert.ok(!message.html.includes('신청 인원:'));assert.ok(!message.html.includes('방문 일정과 목적'));assert.ok(!message.text.includes('요청팀:'));assert.ok(!message.text.includes('방문시작일:'));
  }finally{dom.window.close();}
 });
 test('eml is an unsent UTF-8 HTML draft with all recipients and valid encoded subject',()=>{

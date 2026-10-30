@@ -93,7 +93,7 @@ test('visit periods validate ordering, filter inclusive dates and survive edit, 
   enter('visit_end_date','2026-10-23');await submit();assert.equal(calls[0].data.items[0].visit_end_date,'2026-10-23');
   change('dateFilter','2026-10-22');assert.equal(d.querySelectorAll('[data-record]').length,1);assert.match(d.querySelector('#list').textContent,/2026-10-20 ~ 2026-10-23/);
   change('dateFilter','2026-10-24');assert.equal(d.querySelectorAll('[data-record]').length,0);
-  change('dateFilter','2026-10-23');await login();d.querySelector('#reviewer').value='담당자';d.querySelector('[data-select]').click();await d.querySelector('#mail').onclick();assert.match(d.querySelector('#mailBody').value,/방문시작일: 2026-10-20/);assert.match(d.querySelector('#mailBody').value,/방문종료일: 2026-10-23/);
+  change('dateFilter','2026-10-23');await login();d.querySelector('#reviewer').value='담당자';d.querySelector('[data-select]').click();await d.querySelector('#mail').onclick();assert.match(d.querySelector('#mailPreview').textContent,/2026-10-20 ~ 2026-10-23/);
   await d.querySelector('#downloadDetailedExcel').onclick();const book=new ExcelJS.Workbook();await book.xlsx.load(await getBlob().arrayBuffer());assert.equal(book.worksheets[0].getCell('C2').value,'2026-10-23');
   d.querySelector('[data-edit]').click();assert.equal(d.querySelector('[name="visit_end_date"]').value,'2026-10-23');enter('visit_end_date','2026-10-25');await submit();assert.equal(records().find(r=>r.id==='new0').visit_end_date,'2026-10-25');
  }finally{dom.window.close();}
@@ -265,5 +265,15 @@ test('gate column sorts ascending and descending on desktop and mobile without l
   assert.deepEqual(gates(),['서문','정문','정문']);assert.equal(d.querySelector('[data-sort-heading=gate]').getAttribute('aria-sort'),'ascending');
   d.querySelector('.mobile-sort [data-sort=gate]').click();assert.deepEqual(gates(),['정문','정문','서문']);assert.equal(d.querySelector('[data-select=one]').checked,true);assert.equal(d.querySelector('[data-sort-heading=gate]').getAttribute('aria-sort'),'descending');
   const headings=[...d.querySelectorAll('thead th')].map(x=>x.textContent);assert.ok(headings[8].includes('방문목적'));assert.ok(headings[9].includes('출입위치'));assert.ok(headings[10].includes('승인현황'));
+ }finally{dom.window.close();}
+});
+
+test('mail app launches a short empty-body link before clipboard completes and auto-copies the HTML table',async()=>{
+ const {dom,w,d,login,calls}=await setup();try{
+  await login();d.querySelector('#reviewer').value='담당자';d.querySelector('[data-select=one]').click();await d.querySelector('#mail').onclick();
+  let finish,copied,launched;w.ClipboardItem=class{constructor(data){this.data=data;}};Object.defineProperty(w.navigator,'clipboard',{configurable:true,value:{write:items=>{copied=items[0].data;return new Promise(resolve=>{finish=resolve;});}}});
+  w.HTMLAnchorElement.prototype.click=function(){launched=this.href;assert.ok(this.isConnected);};
+  const pending=d.querySelector('#openMail').onclick();assert.ok(launched.startsWith('mailto:'));assert.ok(launched.length<500);assert.equal(new URL(launched).searchParams.has('body'),false);assert.match(await copied['text/html'].text(),/<table/);assert.equal(calls.length,0);
+  finish();await pending;assert.match(d.querySelector('#mailError').textContent,/自動|자동 복사/);
  }finally{dom.window.close();}
 });

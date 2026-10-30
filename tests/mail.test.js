@@ -10,3 +10,7 @@ test('mailto includes separate recipients and one safely encoded subject and bod
  const link=composeMailto('one@example.com,two@example.com','출입 신청','본문 & 추가\n동일 내용');
  assert.equal(link.split('?')[0],'mailto:one%40example.com,two%40example.com');const params=new URLSearchParams(link.split('?')[1]);assert.equal(params.get('subject'),'출입 신청');assert.equal(params.get('body'),'본문 & 추가\n동일 내용');
 });
+
+test('short mailto launches with recipients and subject only when no body is supplied',()=>{
+ const url=composeMailto('one@example.com,two@example.com','현장 출입신청 요청');assert.ok(!url.includes('body='));assert.equal(new URL(url).searchParams.get('subject'),'현장 출입신청 요청');
+});

@@ -4,6 +4,6 @@ export function normalizeRecipients(value) {
  const seen=new Set();const unique=addresses.filter(address=>{const key=address.toLowerCase();if(seen.has(key))return false;seen.add(key);return true;});
  const result=unique.join(',');if(result.length>2540)throw Error('수신 이메일 주소가 너무 깁니다.');return result;
 }
-export function composeMailto(recipient,subject,body){
- return 'mailto:'+normalizeRecipients(recipient).split(',').map(encodeURIComponent).join(',')+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+export function composeMailto(recipient,subject,body=''){
+ return 'mailto:'+normalizeRecipients(recipient).split(',').map(encodeURIComponent).join(',')+'?subject='+encodeURIComponent(subject)+(body?'&body='+encodeURIComponent(body):'');
 }

@@ -121,22 +121,34 @@ $('mail').onclick=async()=>{if(!admin||!selected.size||!reviewerName())return;tr
  recipient=(await api('settings')).recipient;if(!admin)return;mailItems=sortRows(chosen());mailDocument=buildMailDocument(mailItems,reviewerName());
  $('mailRecipient').textContent='수신: '+recipient+' · '+mailItems.length+'명';$('mailBody').value=mailDocument.text;$('mailPreview').innerHTML=mailDocument.html;$('mailError').textContent='';$('mailDialog').showModal();
 }catch(e){$('adminError').textContent=e.message;}};
-$('openMail').onclick=()=>{if(!admin||!mailDocument)return;location.href=composeMailto(recipient,mailDocument.subject,mailDocument.text);};
-$('copyMail').onclick=async()=>{
- if(!admin||!mailDocument)return;
+async function copyMailBody(){
+ if(!admin||!mailDocument)return false;
  try{
   if(navigator.clipboard?.write&&typeof ClipboardItem!=='undefined'){
    await navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([mailDocument.html],{type:'text/html'}),'text/plain':new Blob([mailDocument.text],{type:'text/plain'})})]);
-   $('mailError').textContent='표 포함 본문을 복사했습니다. 메일 앱에서 본문 전체를 선택한 뒤 붙여넣으세요. 메일 작성 형식은 HTML로 선택해 주세요.';
+   if(admin&&mailDocument)$('mailError').textContent='표 포함 본문을 자동 복사했습니다. 메일 본문에 붙여넣기(Ctrl+V) 해 주세요.';
   }else{
-   await navigator.clipboard.writeText(mailDocument.text);$('mailError').textContent='이 환경은 표 서식 복사를 지원하지 않아 텍스트로 복사했습니다. 표가 필요하면 표 이메일 파일을 내려받아 지원 메일 앱에서 여세요.';
+   await navigator.clipboard.writeText(mailDocument.text);if(admin&&mailDocument)$('mailError').textContent='텍스트로 복사했습니다. 이 환경에서는 표 서식 복사가 지원되지 않습니다. 표는 이메일 파일로 저장해 주세요.';
   }
- }catch(e){$('plainMail').open=true;$('mailBody').focus();$('mailBody').select();$('mailError').textContent='복사 권한을 사용할 수 없습니다. 텍스트를 직접 복사하거나 표 이메일 파일을 내려받아 주세요.';}
+  return true;
+ }catch(e){if(admin&&mailDocument){$('plainMail').open=true;$('mailBody').focus();$('mailBody').select();$('mailError').textContent='자동 복사 권한을 사용할 수 없습니다. 본문 복사를 다시 누르거나 이메일 파일을 저장해 주세요.';}return false;}
+}
+$('copyMail').onclick=copyMailBody;
+$('openMail').onclick=()=>{
+ if(!admin||!mailDocument)return;
+ const href=composeMailto(recipient,mailDocument.subject);
+ const copying=copyMailBody();
+ // Keep the protocol launch inside the original click; never wait for clipboard permission.
+ const link=document.createElement('a');link.href=href;$('mailDialog').append(link);link.click();link.remove();
+ return copying;
 };
 $('downloadMail').onclick=()=>{
  if(!admin||!mailDocument)return;
- const eml=buildDraftEmail(recipient,mailDocument);const url=URL.createObjectURL(new Blob([eml],{type:'message/rfc822'}));const link=document.createElement('a');link.href=url;link.download='현장_출입신청_요청.eml';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
- $('mailError').textContent='표가 포함된 이메일 파일을 저장했습니다. Outlook 등 지원 메일 앱에서 열어 수신자와 본문을 확인한 뒤 발송하세요. 앱에 따라 초안 열기 방식이 다를 수 있습니다.';
+ try{
+  const eml=buildDraftEmail(recipient,mailDocument),url=URL.createObjectURL(new Blob([eml],{type:'message/rfc822'}));
+  const link=document.createElement('a');link.href=url;link.download='현장_출입신청_요청.eml';$('mailDialog').append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+  $('mailError').textContent='파일 저장을 요청했습니다. 브라우저 다운로드 목록에서 .eml 파일을 열어 주세요. 열리지 않으면 메일 앱 열기와 붙여넣기를 이용해 주세요.';
+ }catch(e){$('mailError').textContent='이메일 파일을 저장하지 못했습니다. 메일 앱 열기와 붙여넣기를 이용해 주세요.';}
 };
 $('recordMail').onclick=()=>{if(!admin||!mailItems.length)return;if(confirm('메일 앱에서 실제로 전송하셨나요? 선택한 신청의 전달 시각을 기록합니다.'))return processBulk('delivered',mailItems,$('mailError'));};
 $('settingsForm').onsubmit=async event=>{event.preventDefault();try{recipient=(await api('settings',{recipient:$('recipient').value})).recipient;$('settingsMessage').textContent='수신 주소를 저장했습니다.';}catch(e){$('settingsMessage').textContent=e.message;}};
