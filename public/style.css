@@ -145,3 +145,8 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
 .table-wrap td[data-label="방문목적"]{overflow-wrap:anywhere;word-break:keep-all}
 .table-wrap td[data-label="승인현황"] .badge{font-size:13px;padding:6px 11px}
 @media(max-width:720px){.table-wrap table th:nth-child(9),.table-wrap table th:nth-child(10){min-width:0}.table-wrap td[data-label="방문목적"]{grid-column:1/-1}.table-wrap td[data-label="승인현황"] .badge{font-size:14px}}
+
+#mailDialog{width:min(1120px,96vw)}.mail-guide{padding:12px 15px;background:#edf5f1;border:1px solid #d8e5dc;border-radius:8px;font-size:13px;line-height:1.9}
+.mail-preview{overflow:auto;border:1px solid #d9e3dc;border-radius:8px;padding:22px;background:white;max-height:55vh}.mail-preview>div{min-width:840px}
+#plainMail{margin-top:14px}#mailDialog .mail-actions{position:sticky;bottom:-24px;background:white;padding:14px 0;margin-top:10px;border-top:1px solid #e0e8e3}
+@media(max-width:720px){.mail-preview{padding:14px;max-height:48vh}.mail-guide{font-size:12px}#mailDialog .mail-actions{bottom:-20px;display:grid;grid-template-columns:1fr 1fr;gap:8px}#mailDialog .mail-actions button{min-width:0;min-height:46px;font-size:12px;padding:10px 6px}}

@@ -1,3 +1,4 @@
+import {buildMailDocument,buildDraftEmail} from './mail-document.js';
 import {composeMailto} from './mail-recipients.js';
 import {createPermitAPI} from './firebase-api.js';
 const {api} = createPermitAPI();
@@ -9,7 +10,7 @@ const fields = [
  ['name','이름','text','방문자 이름'],['birth','생년월일','text',today],['phone','휴대전화','tel','010-0000-0000'],['plate','차량번호','text','123가0000'],
  ['vehicle_type','차종',['승용','승합']],['vehicle_name','차명','text','차명 입력'],['role','탑승 구분',['운전자','동승자','도보']],['shoes','안전화',['필요없음',...Array.from({length:15},(_,i)=>String(230+i*5))]]];
 const required = new Set(['visit_date','visit_end_date','purpose','team','name','birth','phone']);
-let admin=false, rows=[], editing=null, busy=false, timer=null, refreshId=0, recipient='', mailItems=[], toastTimer;
+let admin=false, rows=[], editing=null, busy=false, timer=null, refreshId=0, recipient='', mailItems=[], mailDocument=null, toastTimer;
 const selected=new Map();
 const canEdit=row=>admin||(row?.own&&['승인 대기','현장 제출'].includes(row.status)&&!row.delivery_at);
 const selectionLimit=()=>admin?10:5;
@@ -93,7 +94,7 @@ async function refresh(){const sequence=++refreshId;try{const session=await api(
 function openEditor(item){if(!canEdit(item))return;if(!admin&&!actionActor([item])){toast($('adminError').textContent);return;}if(!editing)saveDraft();$('formHome').append($('requestPanel'));document.querySelectorAll('.inline-editor-row').forEach(row=>row.remove());editing={...item};setPeople([item]);$('formTitle').textContent='선택한 신청 수정';$('submit').textContent='수정 저장';$('cancelEdit').hidden=false;$('formError').textContent='';render();$('requestPanel').scrollIntoView?.({block:'nearest'});}
 function closeEditor(){if($('requestPanel').closest('#list'))$('formHome').append($('requestPanel'));document.querySelectorAll('.inline-editor-row').forEach(row=>row.remove());$('requestPanel').classList.remove('inline-editor');editing=null;$('formTitle').textContent='방문자 입력';$('submit').textContent='신청하기 →';$('cancelEdit').hidden=true;$('formError').textContent='';restoreDraft();}
 function chosen(){return [...selected.values()].map(row=>({...row}));}
-function clearMail(){$('mailDialog').close();$('mailBody').value='';$('mailRecipient').textContent='';mailItems=[];}
+function clearMail(){$('mailDialog').close();$('mailBody').value='';$('mailPreview').innerHTML='';$('plainMail').open=false;mailDocument=null;$('mailRecipient').textContent='';mailItems=[];}
 async function processBulk(action,items=chosen(),errorTarget=$('adminError')){if(busy)return;errorTarget.textContent='';if(!admin&&(action!=='delete'||items.some(row=>!canEdit(row)))){errorTarget.textContent='본인의 수정 가능한 신청만 선택해 주세요.';return;}const reviewer=actionActor(items,errorTarget);if(!reviewer)return;busy=true;updateSelection();$('recordMail').disabled=true;try{await api(admin?'bulk':'owner-delete',{action,items:items.map(({id,version})=>({id,version})),...(admin?{reviewer}:{})});selected.clear();if(editing&&items.some(row=>row.id===editing.id))closeEditor();if(action==='delivered')clearMail();toast(action==='delete'?items.length+'명 삭제 완료':action==='approve'?items.length+'명 승인 완료 처리':items.length+'명 발주처 전달 기록 완료');await refresh();}catch(e){errorTarget.textContent=e.message;}finally{busy=false;updateSelection();$('recordMail').disabled=false;}}
 $('requestForm').addEventListener('input',event=>{event.target.removeAttribute('aria-invalid');$('formError').textContent='';if(!editing){clearTimeout(timer);timer=setTimeout(saveDraft,350);}});
 $('requestForm').addEventListener('change',()=>{if(!editing){clearTimeout(timer);timer=setTimeout(saveDraft,350);}});
@@ -116,9 +117,27 @@ document.querySelectorAll('[data-close]').forEach(button=>button.onclick=()=>$(b
 $('approve').onclick=()=>{if(!admin||!selected.size)return;if(!reviewerName())return;if(confirm(`선택한 ${selected.size}명에 대해 발주처의 실제 승인을 확인하셨나요? 승인 완료로 처리합니다.`))return processBulk('approve');};
 function requestDelete(items){if(busy||!items.length||items.some(row=>!canEdit(row)))return;if(!actionActor(items))return;if(confirm(`선택한 ${items.length}명의 신청을 삭제할까요? 삭제 후 복구할 수 없습니다.`))return processBulk('delete',items);}
 $('delete').onclick=()=>requestDelete(chosen());
-$('mail').onclick=async()=>{if(!admin||!selected.size||!reviewerName())return;try{recipient=(await api('settings')).recipient;mailItems=chosen();$('mailRecipient').textContent='수신: '+recipient+' · '+mailItems.length+'명';$('mailBody').value='출입 승인 요청드립니다.\n\n'+mailItems.map((row,index)=>`[${index+1}]\n`+fields.map(([key,label])=>label+': '+(key==='visit_end_date'?endDate(row):(row[key]||''))).join('\n')).join('\n\n')+'\n\n처리자: '+reviewerName();$('mailError').textContent='';$('mailDialog').showModal();}catch(e){$('adminError').textContent=e.message;}};
-$('openMail').onclick=()=>{if(!admin)return;location.href=composeMailto(recipient,'[출입 승인 요청] '+mailItems.length+'명',$('mailBody').value);};
-$('copyMail').onclick=async()=>{try{await navigator.clipboard.writeText($('mailBody').value);$('mailError').textContent='본문을 복사했습니다.';}catch(e){$('mailBody').focus();$('mailBody').select();$('mailError').textContent='Ctrl+C 또는 휴대폰 복사 메뉴로 본문을 복사해 주세요.';}};
+$('mail').onclick=async()=>{if(!admin||!selected.size||!reviewerName())return;try{
+ recipient=(await api('settings')).recipient;if(!admin)return;mailItems=sortRows(chosen());mailDocument=buildMailDocument(mailItems,reviewerName());
+ $('mailRecipient').textContent='수신: '+recipient+' · '+mailItems.length+'명';$('mailBody').value=mailDocument.text;$('mailPreview').innerHTML=mailDocument.html;$('mailError').textContent='';$('mailDialog').showModal();
+}catch(e){$('adminError').textContent=e.message;}};
+$('openMail').onclick=()=>{if(!admin||!mailDocument)return;location.href=composeMailto(recipient,mailDocument.subject,mailDocument.text);};
+$('copyMail').onclick=async()=>{
+ if(!admin||!mailDocument)return;
+ try{
+  if(navigator.clipboard?.write&&typeof ClipboardItem!=='undefined'){
+   await navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([mailDocument.html],{type:'text/html'}),'text/plain':new Blob([mailDocument.text],{type:'text/plain'})})]);
+   $('mailError').textContent='표 포함 본문을 복사했습니다. 메일 앱에서 본문 전체를 선택한 뒤 붙여넣으세요. 메일 작성 형식은 HTML로 선택해 주세요.';
+  }else{
+   await navigator.clipboard.writeText(mailDocument.text);$('mailError').textContent='이 환경은 표 서식 복사를 지원하지 않아 텍스트로 복사했습니다. 표가 필요하면 표 이메일 파일을 내려받아 지원 메일 앱에서 여세요.';
+  }
+ }catch(e){$('plainMail').open=true;$('mailBody').focus();$('mailBody').select();$('mailError').textContent='복사 권한을 사용할 수 없습니다. 텍스트를 직접 복사하거나 표 이메일 파일을 내려받아 주세요.';}
+};
+$('downloadMail').onclick=()=>{
+ if(!admin||!mailDocument)return;
+ const eml=buildDraftEmail(recipient,mailDocument);const url=URL.createObjectURL(new Blob([eml],{type:'message/rfc822'}));const link=document.createElement('a');link.href=url;link.download='현장_출입신청_요청.eml';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ $('mailError').textContent='표가 포함된 이메일 파일을 저장했습니다. Outlook 등 지원 메일 앱에서 열어 수신자와 본문을 확인한 뒤 발송하세요. 앱에 따라 초안 열기 방식이 다를 수 있습니다.';
+};
 $('recordMail').onclick=()=>{if(!admin||!mailItems.length)return;if(confirm('메일 앱에서 실제로 전송하셨나요? 선택한 신청의 전달 시각을 기록합니다.'))return processBulk('delivered',mailItems,$('mailError'));};
 $('settingsForm').onsubmit=async event=>{event.preventDefault();try{recipient=(await api('settings',{recipient:$('recipient').value})).recipient;$('settingsMessage').textContent='수신 주소를 저장했습니다.';}catch(e){$('settingsMessage').textContent=e.message;}};
 $('downloadOwn').onclick=()=>{};

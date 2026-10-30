@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {JSDOM} from 'jsdom';
 import {composeMailto} from '../src/mail-recipients.js';
+import {buildMailDocument,buildDraftEmail} from '../src/mail-document.js';
 import {publicRoster} from '../src/public-roster.js';
 import ExcelJS from 'exceljs';
 import {createApplicantWorkbook,createDetailedWorkbook} from '../src/xlsx-export.js';
@@ -17,7 +18,7 @@ async function setup({draft=null,blocked=false,own=false}={}){
  let signed=false,recipient='test@example.com',blob;const calls=[];
  let records=[{...base,id:'one',status:'현장 제출',own,author_name:'최초 작성자'},{...base,id:'two',name:'예시방문자',status:'발주처 제출'},{...base,id:'three',name:'테스트방문자',status:'승인 완료'}];
  w.URL.createObjectURL=value=>{blob=value;return 'blob:test';};w.URL.revokeObjectURL=()=>{};w.HTMLAnchorElement.prototype.click=function(){};
- w.composeMailto=composeMailto;
+ w.composeMailto=composeMailto;w.buildMailDocument=buildMailDocument;w.buildDraftEmail=buildDraftEmail;
  w.loadApplicantExcel=()=>Promise.resolve({createApplicantWorkbook,createDetailedWorkbook});
  w.createPermitAPI=()=>({api:async(path,data)=>{
   if(path==='session')return {reviewer:signed};
@@ -37,7 +38,7 @@ async function setup({draft=null,blocked=false,own=false}={}){
   if(path==='bulk'){calls.push({path,data:structuredClone(data)});for(const item of data.items){const row=records.find(row=>row.id===item.id);if(!row||row.version!==item.version)throw Error('선택 내역이 변경되었습니다.');}
    for(const item of data.items){const row=records.find(row=>row.id===item.id);if(data.action==='delete')records=records.filter(row=>row.id!==item.id);else{row.version++;row.reviewer=data.reviewer;if(data.action==='approve')row.status='승인 완료';if(data.action==='delivered')row.delivery_at='2026-10-15T02:00:00Z';}}return {};}
  }});
- w.eval(readFileSync('src/app.js','utf8').replace("import {createPermitAPI} from './firebase-api.js';",'').replace("import {composeMailto} from './mail-recipients.js';",'').replace("import('/xlsx-export.js')",'loadApplicantExcel()'));await tick();d.querySelector('#authorName').value='테스트 작성자';
+ w.eval(readFileSync('src/app.js','utf8').replace("import {createPermitAPI} from './firebase-api.js';",'').replace("import {composeMailto} from './mail-recipients.js';",'').replace("import {buildMailDocument,buildDraftEmail} from './mail-document.js';",'').replace("import('/xlsx-export.js')",'loadApplicantExcel()'));await tick();d.querySelector('#authorName').value='테스트 작성자';
  const enter=(key,value,index=0)=>{const input=d.querySelectorAll(`[name="${key}"]`)[index];input.value=value;input.dispatchEvent(new w.Event('input',{bubbles:true}));return input;};
  const login=async()=>{await d.querySelector('#login').onclick();d.querySelector('#password').value='test-password';await d.querySelector('#loginForm').onsubmit({preventDefault(){}});await tick();};
  const change=(id,value)=>{d.querySelector('#'+id).value=value;d.querySelector('#'+id).dispatchEvent(new w.Event('change',{bubbles:true}));};
@@ -241,5 +242,18 @@ test('roster displays purpose and approval status instead of shoes; approval rem
   assert.equal(d.querySelector('[data-record="one"] [data-label="방문목적"]').textContent,'회의');assert.match(d.querySelector('[data-record="one"] [data-label="승인현황"]').textContent,/승인 대기/);
   assert.equal(d.querySelector('#approve').hidden,true);await d.querySelector('#approve').onclick();assert.equal(calls.length,0);
   await login();d.querySelector('#reviewer').value='승인 담당자';d.querySelector('[data-select="one"]').click();await d.querySelector('#approve').onclick();assert.equal(calls[0].data.action,'approve');assert.match(d.querySelector('[data-record="one"] [data-label="승인현황"]').textContent,/승인 완료/);
+ }finally{dom.window.close();}
+});
+
+test('mail preview copies HTML plus plain fallback and downloads an unsent table email without marking delivery',async()=>{
+ const {dom,w,d,login,calls,getBlob}=await setup();try{
+  await d.querySelector('#downloadMail').onclick();assert.equal(getBlob(),undefined);
+  await login();d.querySelector('#reviewer').value='가상 담당자';d.querySelector('[data-select=one]').click();await d.querySelector('#mail').onclick();
+  assert.equal(d.querySelectorAll('#mailPreview th').length,9);assert.match(d.querySelector('#mailPreview').textContent,/현장 출입신청 요청/);
+  let copied;w.ClipboardItem=class{constructor(data){this.data=data;}};Object.defineProperty(w.navigator,'clipboard',{configurable:true,value:{write:async items=>{copied=items[0].data;}}});
+  await d.querySelector('#copyMail').onclick();assert.match(await copied['text/html'].text(),/<table/);assert.match(await copied['text/plain'].text(),/가상방문자/);assert.match(d.querySelector('#mailError').textContent,/표 포함 본문/);
+  await d.querySelector('#downloadMail').onclick();assert.match(await getBlob().text(),/X-Unsent: 1/);assert.equal(calls.length,0);
+  Object.defineProperty(w.navigator,'clipboard',{configurable:true,value:{writeText:async text=>{copied=text;}}});w.ClipboardItem=undefined;await d.querySelector('#copyMail').onclick();assert.match(copied,/가상방문자/);assert.match(d.querySelector('#mailError').textContent,/텍스트로 복사/);
+  await d.querySelector('#login').onclick();assert.equal(d.querySelector('#mailPreview').innerHTML,'');assert.equal(d.querySelector('#mailBody').value,'');
  }finally{dom.window.close();}
 });
