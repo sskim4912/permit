@@ -39,16 +39,18 @@ jobs:
           test_status=$?
           set -e
           cat /tmp/firebase-test-output.log
-          python3 - <<'PYTHON'
-          import html, os, re
+          python3 - "$test_status" <<'PYTHON'
+          import html, os, re, sys
           from pathlib import Path
           output = Path('/tmp/firebase-test-output.log').read_text(errors='replace')
           output = re.sub(r'\x1b\[[0-9;]*m', '', output)
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
               summary.write('### Firebase emulator test results\n<pre>' + html.escape(output[-18000:]) + '</pre>\n')
-          if 'test_status' not in os.environ and ('failing tests:' in output or 'Error:' in output):
-              diagnostic = output[-12000:].replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
-              print('::error title=Firebase test diagnostics::' + diagnostic)
+          if sys.argv[1] != '0':
+              marker = output.rfind('failing tests:')
+              diagnostic = output[marker:] if marker >= 0 else output[-3000:]
+              diagnostic = diagnostic[-3500:].replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+              print('::error title=Firebase test failure details::' + diagnostic)
           PYTHON
           exit "$test_status"
         env:
