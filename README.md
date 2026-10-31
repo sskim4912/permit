@@ -64,4 +64,4 @@ GitHub Actions가 `permit-firebase-setup` 또는 `main` push에서 빌드·화�
 
 현장 위치도 왼쪽의 ‘출입신청 담당자 보기’에서 팀별 담당자 두 명을 확인합니다. 관리자만 표의 이름·전화번호·이메일 및 팀 목록을 저장할 수 있습니다. 요청팀 선택은 저장된 디렉터리와 연결하며 ‘팀명 이름, 이름’만 표시합니다.
 
-신규 신청의 자동 알림은 솔라피 문자(LMS)와 회사 Microsoft 365 HTML 표 이메일을 사용합니다. 서버 연결과 계정 설정이 완료되어야 실제 전송되며, 신청 저장 성공과 발송 결과는 별도로 표시합니다. 설정·배포·재시도 기준은 [NOTIFICATIONS.md](NOTIFICATIONS.md)를 참고하세요. 외부 발송 없이 `npm test --prefix functions`로 서버 로직을 검사할 수 있습니다.
+신규 신청의 문자 알림은 GitHub Actions가 약 5분 간격(실행 지연 가능)으로 Firestore 대기 항목을 확인해 솔라피 문자(LMS)로 전송합니다. Google Cloud 결제 서버는 사용하지 않으며, 솔라피 요금만 별도입니다. 신청 저장·문자 대기·발송 접수를 구분합니다. 설정·배포·재시도 기준은 [NOTIFICATIONS.md](NOTIFICATIONS.md)를 참고하세요. 외부 발송 없이 `npm test --prefix functions`로 서버 로직을 검사할 수 있습니다.

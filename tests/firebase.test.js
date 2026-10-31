@@ -233,3 +233,17 @@ test('notification HTTP handler verifies ownership and atomically prevents dupli
   const another=await owner.api('requests',{author_name:'알림 검증',items:[{...item,team:'관리팀',team_id:'management'}]});const overlap=await invoke(configured,[...submitted.ids,...another.ids],'1'.repeat(64));assert.equal(overlap.status,400);assert.match(overlap.result.message,/이미 발송/);assert.equal(sends,4);
  }finally{await deleteApp(owner.app);await db.terminate();}
 });
+
+test('free scheduled queue is atomic for ten visitors, private, deduplicated and readable only through browser receipts',async()=>{
+ const {processNotificationQueue}=await import('../functions/lib/queue.js');const queueApp=initializeAdminApp({projectId:project},'queue-tests'),db=getAdminFirestore(queueApp);const owner=createPermitAPI({config:{apiKey:'demo-key',projectId:project},emulator:true,name:'queue-owner',ownerKey:'3'.repeat(64)}),other=createPermitAPI({config:{apiKey:'demo-key',projectId:project},emulator:true,name:'queue-other',ownerKey:'4'.repeat(64)});const sent=[];
+ try{
+  const created=await owner.api('requests',{author_name:'예약 알림 검증',items:Array.from({length:10},(_,i)=>({...item,name:'예약방문자'+i,team:'관리팀',team_id:'management'}))});assert.ok(created.queue_id);assert.equal(created.ids.length,10);
+  const pending=await owner.api('notify',{queue_id:created.queue_id});assert.equal(pending.results[0].status,'pending');
+  const publicDb=env.unauthenticatedContext().firestore();await assertFails(getDoc(doc(publicDb,'notificationQueue',created.queue_id)));await assertFails(setDoc(doc(publicDb,'applicantCopies','3'.repeat(64),'notificationReceipts',created.queue_id),{results:[{status:'sent'}]}));
+  await assertFails(setDoc(doc(publicDb,'notificationQueue','z'.repeat(20)),{ids:created.ids,owner_key:'3'.repeat(64),status:'pending',created:serverTimestamp()}));
+  const worker=()=>processNotificationQueue({db,Timestamp:AdminTimestamp,config:{solapi:{}},send:async task=>{sent.push(task);return 'fake-solapi-receipt';},limit:100});
+  await worker();const done=await owner.api('notify',{queue_id:created.queue_id});assert.equal(done.results.length,2);assert.ok(done.results.every(r=>r.status==='sent'&&r.channel==='sms'));assert.equal(done.results[0].to,undefined);assert.equal(done.results[0].providerId,undefined);assert.equal((await other.api('notify',{queue_id:created.queue_id})).results[0].status,'pending');
+  const before=sent.length;const queue=(await db.doc('notificationQueue/'+created.queue_id).get()).data();await db.doc('notificationQueue/'+'d'.repeat(20)).set({...queue,status:'pending',leaseUntil:AdminTimestamp.fromMillis(0)});await worker();assert.equal(sent.length,before);
+  const deleted=await owner.api('requests',{author_name:'삭제 알림 검증',items:[{...item,team:'관리팀',team_id:'management'}]});const row=(await owner.api('requests')).find(r=>r.id===deleted.ids[0]);await owner.api('owner-delete',{items:[row]});await worker();assert.equal(sent.length,before);assert.equal((await owner.api('notify',{queue_id:deleted.queue_id})).results[0].status,'failed');
+ }finally{await deleteApp(owner.app);await deleteApp(other.app);await db.terminate();await deleteAdminApp(queueApp);}
+});

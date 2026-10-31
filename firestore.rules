@@ -128,6 +128,23 @@ service cloud.firestore {
       allow read: if true;
       allow create, update: if isAdmin() && request.resource.data.keys().hasOnly(['version','modified_at']) && request.resource.data.version is int && request.resource.data.version == (resource == null ? 1 : resource.data.version+1) && request.resource.data.modified_at==request.time;
     }
+    function queuedOriginal(id,key) { let original=getAfter(/databases/$(database)/documents/requests/$(id)).data; return id is string && original.owner_key==key && original.created==request.time && ('team_id' in original); }
+    match /notificationQueue/{id} {
+      allow read: if isAdmin();
+      allow create: if id.matches('^[A-Za-z0-9]{20}$') && request.resource.data.keys().hasAll(['ids','owner_key','status','created']) && request.resource.data.keys().hasOnly(['ids','owner_key','status','created']) && request.resource.data.owner_key is string && request.resource.data.owner_key.matches('^[a-f0-9]{64}$') && request.resource.data.status=='pending' && request.resource.data.created==request.time && request.resource.data.ids is list && request.resource.data.ids.size()>0 && request.resource.data.ids.size()<=10 && request.resource.data.ids.toSet().size()==request.resource.data.ids.size()
+        && (request.resource.data.ids.size()<=0 || queuedOriginal(request.resource.data.ids[0],request.resource.data.owner_key))
+        && (request.resource.data.ids.size()<=1 || queuedOriginal(request.resource.data.ids[1],request.resource.data.owner_key))
+        && (request.resource.data.ids.size()<=2 || queuedOriginal(request.resource.data.ids[2],request.resource.data.owner_key))
+        && (request.resource.data.ids.size()<=3 || queuedOriginal(request.resource.data.ids[3],request.resource.data.owner_key))
+        && (request.resource.data.ids.size()<=4 || queuedOriginal(request.resource.data.ids[4],request.resource.data.owner_key))
+        && (request.resource.data.ids.size()<=5 || queuedOriginal(request.resource.data.ids[5],request.resource.data.owner_key))
+        && (request.resource.data.ids.size()<=6 || queuedOriginal(request.resource.data.ids[6],request.resource.data.owner_key))
+        && (request.resource.data.ids.size()<=7 || queuedOriginal(request.resource.data.ids[7],request.resource.data.owner_key))
+        && (request.resource.data.ids.size()<=8 || queuedOriginal(request.resource.data.ids[8],request.resource.data.owner_key))
+        && (request.resource.data.ids.size()<=9 || queuedOriginal(request.resource.data.ids[9],request.resource.data.owner_key))
+        ;
+    }
+    match /applicantCopies/{key}/notificationReceipts/{id} { allow get: if key.matches('^[a-f0-9]{64}$'); }
     // Notification claims, results and rate limits are server-only.
     match /notificationJobs/{id} { allow read, write: if false; }
     match /notificationClaims/{id} { allow read, write: if false; }

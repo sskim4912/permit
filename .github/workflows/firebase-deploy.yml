@@ -118,14 +118,3 @@ jobs:
         run: |
           node scripts/verify-hosting.mjs
           echo 'Published: https://permit-daesan-461e8.web.app' >> "$GITHUB_STEP_SUMMARY"
-      - name: Configure and publish automatic team notifications when connected
-        env:
-          PERMIT_NOTIFICATION_CONFIG: ${{ secrets.PERMIT_NOTIFICATION_CONFIG }}
-          FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true'
-        run: |
-          if [ -z "$PERMIT_NOTIFICATION_CONFIG" ]; then
-            echo '::notice::Automatic notifications need PERMIT_NOTIFICATION_CONFIG (SOLAPI or Microsoft 365). Directory features will deploy; automatic delivery remains unavailable until configured.'
-          else
-            npm ci --prefix functions
-            node scripts/configure-notifications.mjs --deploy
-          fi

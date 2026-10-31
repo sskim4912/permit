@@ -45,17 +45,5 @@
       "enabled": false
     },
     "singleProjectMode": true
-  },
-  "functions": [
-    {
-      "source": "functions",
-      "codebase": "permit-notifications",
-      "ignore": [
-        "node_modules",
-        ".git",
-        "*-debug.log",
-        "test"
-      ]
-    }
-  ]
+  }
 }

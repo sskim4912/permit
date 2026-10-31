@@ -74,9 +74,8 @@ export function createPermitAPI({config=firebaseConfig, emulator=false, name='pe
       const meta=await getDoc(metaRef);if(!meta.exists())return {teams:structuredClone(defaultTeams),version:0};const snapshot=await getDocs(collection(db,'contactTeams'));return {teams:snapshot.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.order-b.order),version:meta.data().version};
     }
     if(path==='notify'){
-      const key=browserKey();if(!key)throw Error('신청한 브라우저에서 다시 시도해 주세요.');
-      let response;try{response=await fetch('https://asia-northeast3-permit-daesan-461e8.cloudfunctions.net/notifyPermit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:data.ids,ownerKey:key}),signal:AbortSignal.timeout(90000)});}catch(e){throw Error('알림 서버 응답을 확인하지 못했습니다. 신청은 저장되어 있으며, 다시 확인하면 기존 발송 결과를 조회합니다.');}
-      let result;try{result=await response.json();}catch(e){throw Error('알림 서버가 연결되지 않았습니다. 관리자에게 문의해 주세요.');}if(!response.ok)throw Error(result.message||'알림 발송 요청이 거절되었습니다.');return result;
+      const key=browserKey();if(!key)throw Error('신청한 브라우저에서 확인해 주세요.');if(!/^[A-Za-z0-9]{20}$/.test(data.queue_id||''))throw Error('이전 방식으로 접수된 신청입니다. 새 신청부터 주기적 문자 발송이 적용됩니다.');
+      const receipt=await getDoc(doc(db,'applicantCopies',key,'notificationReceipts',data.queue_id));return receipt.exists()?receipt.data():{results:[{team:'담당자',channel:'sms',status:'pending',retryable:true,message:'문자 발송 대기 중입니다. 약 5분 간격으로 확인하며 GitHub 실행 대기에 따라 더 늦어질 수 있습니다.'}]};
     }
     if(path==='settings'){
       requireAdmin();const ref=doc(db,'settings','mail');
@@ -105,7 +104,8 @@ export function createPermitAPI({config=firebaseConfig, emulator=false, name='pe
       if(!Array.isArray(data.items)||data.items.length<1||data.items.length>10)throw Error('1~10명씩 제출해 주세요.');
       const author_name=personName(data.author_name),owner_key=browserKey(true),items=data.items.map(payload),batch=writeBatch(db),ids=[];
       for(const item of items){const ref=doc(collection(db,'requests'));ids.push(ref.id);const record={...item,author_name,owner_key,status:'승인 대기',reviewer:'',version:1,created:serverTimestamp()};batch.set(ref,record);batch.set(doc(db,'publicRequests',ref.id),summary(record));mirror(batch,ref,record);}
-      await batch.commit();return {count:items.length,ids};
+      let queue_id=null;if(items.every(item=>item.team_id)){const queue=doc(collection(db,'notificationQueue'));queue_id=queue.id;batch.set(queue,{ids,owner_key,status:'pending',created:serverTimestamp()});}
+      await batch.commit();return {count:items.length,ids,queue_id};
     }
     if(path==='owner-update'){
       const key=browserKey();if(!key)throw Error('신청한 브라우저에서만 수정할 수 있습니다.');

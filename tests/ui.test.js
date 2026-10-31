@@ -29,7 +29,7 @@ async function setup({draft=null,blocked=false,own=false}={}){
   if(path==='login'){if(data.password!=='test-password')throw Error('비밀번호가 맞지 않습니다.');signed=true;return {};}
   if(path==='logout'){signed=false;return {};}
   if(path==='requests'&&!data)return records.map(row=>signed||row.own?{...row}:{id:row.id,...publicRoster(row)});
-  if(path==='requests'){calls.push({path,data:structuredClone(data)});records.push(...data.items.map((row,index)=>({...row,own:true,author_name:data.author_name,id:'new'+index,status:'승인 대기',reviewer:'',version:1,created:'2026-10-15T01:00:00Z'})));return {count:data.items.length,ids:data.items.map((_,i)=>'new'+i)};}
+  if(path==='requests'){calls.push({path,data:structuredClone(data)});records.push(...data.items.map((row,index)=>({...row,own:true,author_name:data.author_name,id:'new'+index,status:'승인 대기',reviewer:'',version:1,created:'2026-10-15T01:00:00Z'})));return {count:data.items.length,ids:data.items.map((_,i)=>'new'+i),queue_id:'q'.repeat(20)};}
   if(path==='owner-update'){
    const row=records.find(r=>r.id===data.id);if(!row?.own||!['승인 대기','현장 제출'].includes(row.status)||row.delivery_at)throw Error('본인 승인 대기만 수정할 수 있습니다.');calls.push({path,data:structuredClone(data)});Object.assign(row,data,{modified_by:data.reviewer,modified_at:'2026-10-16T00:00:00Z',version:row.version+1});return {};
   }
@@ -345,4 +345,9 @@ test('submission routes the saved IDs and separates registration from partial no
 
 test('SMS-only success never reports that email was sent',async()=>{
  const {dom,d,enter,submit,setNotifyResult}=await setup();try{setNotifyResult({results:[{team:'관리팀',channel:'sms',status:'sent'}]});enter('purpose','점검');enter('team','관리팀');enter('name','가상방문자');enter('birth','19900101');enter('phone','01000000000');await submit();assert.match(d.querySelector('#notificationResult').textContent,/문자 발송 요청이 접수/);assert.ok(!d.querySelector('#notificationResult').textContent.includes('이메일'));assert.equal(d.querySelector('#retryNotifications').hidden,true);}finally{dom.window.close();}
+});
+
+
+test('scheduled notification stays pending without claiming delivery or showing an error',async()=>{
+ const {dom,d,w,enter,submit,setNotifyResult,notifications}=await setup();try{setNotifyResult({results:[{team:'담당자',channel:'sms',status:'pending',retryable:true,message:'문자 발송 대기 중입니다. 약 5분 간격으로 확인합니다.'}]});enter('purpose','점검');enter('team','관리팀');enter('name','가상방문자');enter('birth','19900101');enter('phone','01000000000');await submit();assert.match(d.querySelector('#notificationResult').textContent,/발송 대기/);assert.ok(!d.querySelector('#notificationResult').classList.contains('notification-error'));assert.equal(notifications[0].queue_id,'q'.repeat(20));assert.equal(JSON.parse(w.sessionStorage.getItem('permit-pending-notifications')).queue_id,'q'.repeat(20));assert.equal(d.querySelector('#retryNotifications').textContent,'문자 발송 결과 확인');}finally{dom.window.close();}
 });
