@@ -1,3 +1,4 @@
+import {defaultTeams,teamLabel,validateTeams} from '../functions/lib/directory.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -11,21 +12,24 @@ const tick=()=>new Promise(resolve=>setTimeout(resolve,5));
 const base={visit_date:'2026-10-15',purpose:'회의',team:'공무팀',gate:'서문',name:'가상방문자',birth:'1990-01-23',phone:'010-0000-0000',plate:'=formula',vehicle_type:'승용',vehicle_name:'캐스퍼',role:'운전자',shoes:'280',lunch:'미신청',reviewer:'',version:1,created:'2026-10-15T00:00:00Z'};
 async function setup({draft=null,blocked=false,own=false}={}){
  const dom=new JSDOM(readFileSync('public/index.html','utf8'),{url:'https://permit.example',runScripts:'outside-only'}),w=dom.window,d=w.document;
+ w.structuredClone=structuredClone;w.defaultTeams=defaultTeams;w.teamLabel=teamLabel;w.validateTeams=validateTeams;w.eval(readFileSync('src/directory-ui.js','utf8').replace(/import .*?;\n/,'').replace('export function createDirectoryUI','function createDirectoryUI').replace('export {defaultTeams,teamLabel};',''));
  const NativeDate=w.Date;w.Date=class extends NativeDate{constructor(...args){super(...(args.length?args:['2026-10-15T03:00:00Z']));}};
  w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};w.confirm=()=>true;w.setInterval=()=>0;
  const realTimer=w.setTimeout.bind(w);w.setTimeout=(fn,ms)=>ms===350?realTimer(fn,0):0;w.Blob=Blob;
  if(draft)w.sessionStorage.setItem('permit-draft',JSON.stringify(draft));if(blocked)Object.defineProperty(w,'sessionStorage',{get(){throw Error('blocked');}});
- let signed=false,recipient='test@example.com',blob;const calls=[];
+ let signed=false,recipient='test@example.com',blob,directoryVersion=0,directoryRecords=structuredClone(defaultTeams),notifyResult={results:[{team:'관리팀',channel:'sms',status:'sent'},{team:'관리팀',channel:'email',status:'sent'}]};const calls=[],notifications=[];
  let records=[{...base,id:'one',status:'현장 제출',own,author_name:'최초 작성자'},{...base,id:'two',name:'예시방문자',status:'발주처 제출'},{...base,id:'three',name:'테스트방문자',status:'승인 완료'}];
  w.URL.createObjectURL=value=>{blob=value;return 'blob:test';};w.URL.revokeObjectURL=()=>{};w.HTMLAnchorElement.prototype.click=function(){};
  w.composeMailto=composeMailto;w.buildMailDocument=buildMailDocument;w.buildDraftEmail=buildDraftEmail;
  w.loadApplicantExcel=()=>Promise.resolve({createApplicantWorkbook,createDetailedWorkbook});
  w.createPermitAPI=()=>({api:async(path,data)=>{
+  if(path==='directory'){if(data&&!signed)throw Error('관리자만 수정');if(data){directoryRecords=structuredClone(data.teams);directoryVersion++;calls.push({path,data});}return {teams:structuredClone(directoryRecords),version:directoryVersion};}
+  if(path==='notify'){notifications.push(data);return structuredClone(notifyResult);}
   if(path==='session')return {reviewer:signed};
   if(path==='login'){if(data.password!=='test-password')throw Error('비밀번호가 맞지 않습니다.');signed=true;return {};}
   if(path==='logout'){signed=false;return {};}
   if(path==='requests'&&!data)return records.map(row=>signed||row.own?{...row}:{id:row.id,...publicRoster(row)});
-  if(path==='requests'){calls.push({path,data:structuredClone(data)});records.push(...data.items.map((row,index)=>({...row,own:true,author_name:data.author_name,id:'new'+index,status:'승인 대기',reviewer:'',version:1,created:'2026-10-15T01:00:00Z'})));return {count:data.items.length};}
+  if(path==='requests'){calls.push({path,data:structuredClone(data)});records.push(...data.items.map((row,index)=>({...row,own:true,author_name:data.author_name,id:'new'+index,status:'승인 대기',reviewer:'',version:1,created:'2026-10-15T01:00:00Z'})));return {count:data.items.length,ids:data.items.map((_,i)=>'new'+i)};}
   if(path==='owner-update'){
    const row=records.find(r=>r.id===data.id);if(!row?.own||!['승인 대기','현장 제출'].includes(row.status)||row.delivery_at)throw Error('본인 승인 대기만 수정할 수 있습니다.');calls.push({path,data:structuredClone(data)});Object.assign(row,data,{modified_by:data.reviewer,modified_at:'2026-10-16T00:00:00Z',version:row.version+1});return {};
   }
@@ -42,12 +46,12 @@ async function setup({draft=null,blocked=false,own=false}={}){
   if(path==='bulk'){calls.push({path,data:structuredClone(data)});for(const item of data.items){const row=records.find(row=>row.id===item.id);if(!row||row.version!==item.version)throw Error('선택 내역이 변경되었습니다.');}
    for(const item of data.items){const row=records.find(row=>row.id===item.id);if(data.action==='delete')records=records.filter(row=>row.id!==item.id);else{row.version++;row.reviewer=data.reviewer;if(data.action==='approve'){row.status='승인 완료';row.final_approved={by:data.reviewer,at:'2026-10-15T03:04:05Z'};}if(data.action==='delivered')row.delivery_at='2026-10-15T02:00:00Z';}}return {};}
  }});
- w.eval(readFileSync('src/app.js','utf8').replace("import {createPermitAPI} from './firebase-api.js';",'').replace("import {composeMailto} from './mail-recipients.js';",'').replace("import {buildMailDocument,buildDraftEmail} from './mail-document.js';",'').replace("import('/xlsx-export.js')",'loadApplicantExcel()'));await tick();d.querySelector('#authorName').value='테스트 작성자';d.querySelector('[name=lunch]').value='미신청';
- const enter=(key,value,index=0)=>{const input=d.querySelectorAll(`[name="${key}"]`)[index];input.value=value;input.dispatchEvent(new w.Event('input',{bubbles:true}));return input;};
+ w.eval(readFileSync('src/app.js','utf8').replace("import {createDirectoryUI,defaultTeams,teamLabel} from './directory-ui.js';",'').replace("import {createPermitAPI} from './firebase-api.js';",'').replace("import {composeMailto} from './mail-recipients.js';",'').replace("import {buildMailDocument,buildDraftEmail} from './mail-document.js';",'').replace("import('/xlsx-export.js')",'loadApplicantExcel()'));await tick();d.querySelector('#authorName').value='테스트 작성자';d.querySelector('[name=lunch]').value='미신청';
+ const enter=(key,value,index=0)=>{const input=d.querySelectorAll(`[name="${key}"]`)[index];input.value=key==='team'&&!defaultTeams.some(t=>t.name===value)?'관리팀':value;input.dispatchEvent(new w.Event('input',{bubbles:true}));return input;};
  const login=async()=>{await d.querySelector('#login').onclick();d.querySelector('#password').value='test-password';await d.querySelector('#loginForm').onsubmit({preventDefault(){}});await tick();};
  const change=(id,value)=>{d.querySelector('#'+id).value=value;d.querySelector('#'+id).dispatchEvent(new w.Event('change',{bubbles:true}));};
  const submit=()=>d.querySelector('#requestForm').onsubmit({preventDefault(){}});
- return {dom,w,d,calls,enter,login,change,submit,getBlob:()=>blob,records:()=>records};
+ return {dom,w,d,calls,enter,login,change,submit,getBlob:()=>blob,records:()=>records,notifications,setNotifyResult:value=>{notifyResult=value;}};
 }
 test('one screen and two statuses; public names are visible while original birth and privileged controls are hidden',async()=>{
  const {dom,d}=await setup();try{assert.equal(d.querySelector('#requestPanel').hidden,false);assert.equal(d.querySelector('#adminControls').hidden,true);assert.equal(d.querySelector('#adminSettings').hidden,true);assert.equal(d.querySelectorAll('[data-select]').length,0);assert.equal(d.querySelectorAll('[data-edit]').length,0);assert.ok(d.querySelector('#list').textContent.includes('가상방문자'));assert.ok(!d.querySelector('#list').textContent.includes('1990-01-23'));assert.deepEqual([...d.querySelector('#statusFilter').options].map(option=>option.textContent),['전체','승인 대기','승인 완료']);assert.ok(!d.querySelector('#list').textContent.includes('현장 제출'));}finally{dom.window.close();}
@@ -86,7 +90,7 @@ test('admin workbook keeps phone zeros and literal values; logout removes origin
  }finally{dom.window.close();}
 });
 test('status and search filters clear selections and map legacy statuses without rewriting data',async()=>{
- const {dom,d,login,change,records}=await setup();try{await login();assert.ok(d.querySelector('thead #selectAll'));assert.equal(d.querySelector('.bulk-toolbar #selectAll'),null);assert.equal(d.querySelectorAll('[data-select]:checked').length,0);d.querySelector('[data-select="one"]').click();change('statusFilter','승인 대기');assert.equal(d.querySelectorAll('[data-record]').length,2);assert.equal(d.querySelector('#selectedCount').textContent,'0명 선택 · 최대 10명');assert.match(d.querySelector('#list').textContent,/기존 전달 기록/);assert.equal(records()[0].status,'현장 제출');assert.equal(records()[1].status,'발주처 제출');change('statusFilter','승인 완료');assert.equal(d.querySelectorAll('[data-record]').length,1);}finally{dom.window.close();}
+ const {dom,d,login,change,records}=await setup();try{await login();assert.ok(d.querySelector('.roster-table thead #selectAll'));assert.equal(d.querySelector('.bulk-toolbar #selectAll'),null);assert.equal(d.querySelectorAll('[data-select]:checked').length,0);d.querySelector('[data-select="one"]').click();change('statusFilter','승인 대기');assert.equal(d.querySelectorAll('[data-record]').length,2);assert.equal(d.querySelector('#selectedCount').textContent,'0명 선택 · 최대 10명');assert.match(d.querySelector('#list').textContent,/기존 전달 기록/);assert.equal(records()[0].status,'현장 제출');assert.equal(records()[1].status,'발주처 제출');change('statusFilter','승인 완료');assert.equal(d.querySelectorAll('[data-record]').length,1);}finally{dom.window.close();}
 });
 
 test('visit periods validate ordering, filter inclusive dates and survive edit, email and detailed Excel',async()=>{
@@ -137,13 +141,13 @@ test('row deletion requires confirmation while author search remains available',
  }finally{dom.window.close();}
 });
 test('unowned requests cannot expose edit/delete actions or personal information',async()=>{
- const {dom,d}=await setup();try{assert.equal(d.querySelectorAll('thead th:not([colspan])').length,14);assert.equal(d.querySelectorAll('[data-edit],[data-delete]').length,0);assert.equal(d.querySelector('#ownerHelp').hidden,false);assert.match(d.querySelector('#ownerHelp').textContent,/이전 신청/);}finally{dom.window.close();}
+ const {dom,d}=await setup();try{assert.equal(d.querySelectorAll('.roster-table thead th:not([colspan])').length,14);assert.equal(d.querySelectorAll('[data-edit],[data-delete]').length,0);assert.equal(d.querySelector('#ownerHelp').hidden,false);assert.match(d.querySelector('#ownerHelp').textContent,/이전 신청/);}finally{dom.window.close();}
 });
 
 test('site map toggles independently of applicant draft, list refresh and administrator mode',async()=>{
  const {dom,d,enter,login}=await setup();try{
   const button=d.querySelector('#siteMapToggle'),panel=d.querySelector('#siteMapPanel'),image=d.querySelector('#siteMapImage');
-  assert.equal(d.querySelector('.gate-maps').firstElementChild,button);
+  assert.equal(d.querySelector('.gate-maps').firstElementChild,d.querySelector('#contactsToggle'));assert.equal(button.previousElementSibling.id,'contactsToggle');
   assert.equal(d.querySelectorAll('.gate-maps a[target="_blank"]').length,2);
   assert.equal(panel.hidden,true);assert.equal(image.getAttribute('src'),null);
   enter('name','작성 중 방문자');button.click();
@@ -201,11 +205,11 @@ test('applicant can edit after administrator corrects visitor name without chang
 
 test('weekly unified roster keeps fourteen columns, masks others and preserves full administrator view',async()=>{
  const {dom,d,login,records}=await setup({own:true});try{
-  assert.equal(d.querySelectorAll('thead th:not([colspan])').length,14);assert.equal(d.querySelectorAll('[data-record]').length,3);assert.match(d.querySelector('#weekLabel').textContent,/2026-10-12 ~ 2026-10-18/);
+  assert.equal(d.querySelectorAll('.roster-table thead th:not([colspan])').length,14);assert.equal(d.querySelectorAll('[data-record]').length,3);assert.match(d.querySelector('#weekLabel').textContent,/2026-10-12 ~ 2026-10-18/);
   const other=d.querySelector('[data-record="two"]');assert.match(other.textContent,/19\*\*-\*\*-\*\*/);assert.ok(other.textContent.includes('010-0000-0000'));assert.ok(!other.textContent.includes('1990-01-23'));assert.match(d.querySelector('[data-record="one"]').textContent,/010-0000-0000/);
   records().push({...base,id:'spanning',visit_date:'2026-10-18',visit_end_date:'2026-10-20',status:'승인 대기'});await d.querySelector('#refresh').onclick();assert.ok(d.querySelector('[data-record="spanning"]'));
   d.querySelector('#weekNext').click();assert.ok(d.querySelector('[data-record="spanning"]'));assert.equal(d.querySelector('[data-record="one"]'),null);
-  d.querySelector('#weekCurrent').click();await login();assert.ok(d.querySelector('[data-record="two"]').textContent.includes('1990-01-23'));assert.equal(d.querySelectorAll('thead th:not([colspan])').length,14);
+  d.querySelector('#weekCurrent').click();await login();assert.ok(d.querySelector('[data-record="two"]').textContent.includes('1990-01-23'));assert.equal(d.querySelectorAll('.roster-table thead th:not([colspan])').length,14);
  }finally{dom.window.close();}
 });
 
@@ -224,17 +228,17 @@ test('header sorting toggles dates and Korean names without changing selected re
   await login();records()[0].visit_date='2026-10-13';records()[1].visit_date='2026-10-14';records()[2].visit_date='2026-10-15';await d.querySelector('#refresh').onclick();
   const ids=()=>[...d.querySelectorAll('[data-record]')].map(r=>r.dataset.record);
   assert.deepEqual(ids(),['three','two','one']);d.querySelector('[data-select="one"]').click();
-  d.querySelector('thead [data-sort="visit_date"]').click();assert.deepEqual(ids(),['one','two','three']);assert.equal(d.querySelector('[data-select="one"]').checked,true);assert.equal(d.querySelector('[data-sort-heading="visit_date"]').getAttribute('aria-sort'),'ascending');
-  d.querySelector('thead [data-sort="name"]').click();assert.deepEqual(ids(),['one','two','three']);
-  d.querySelector('thead [data-sort="name"]').click();assert.deepEqual(ids(),['three','two','one']);assert.equal(d.querySelector('[data-select="one"]').checked,true);
+  d.querySelector('.roster-table thead [data-sort="visit_date"]').click();assert.deepEqual(ids(),['one','two','three']);assert.equal(d.querySelector('[data-select="one"]').checked,true);assert.equal(d.querySelector('[data-sort-heading="visit_date"]').getAttribute('aria-sort'),'ascending');
+  d.querySelector('.roster-table thead [data-sort="name"]').click();assert.deepEqual(ids(),['one','two','three']);
+  d.querySelector('.roster-table thead [data-sort="name"]').click();assert.deepEqual(ids(),['three','two','one']);assert.equal(d.querySelector('[data-select="one"]').checked,true);
   await d.querySelector('#downloadExcel').onclick();const book=new ExcelJS.Workbook();await book.xlsx.load(await getBlob().arrayBuffer());assert.equal(book.worksheets[0].getCell('C2').value,'테스트방문자');
-  d.querySelector('.mobile-sort [data-sort="name"]').click();assert.deepEqual(ids(),['one','two','three']);assert.ok(d.querySelector('thead #selectAll'));assert.equal(d.querySelector('.bulk-toolbar #selectAll'),null);
+  d.querySelector('.mobile-sort [data-sort="name"]').click();assert.deepEqual(ids(),['one','two','three']);assert.ok(d.querySelector('.roster-table thead #selectAll'));assert.equal(d.querySelector('.bulk-toolbar #selectAll'),null);
  }finally{dom.window.close();}
 });
 
 test('header checkbox selects visible eligible records, supports mixed state, and clears without a toolbar checkbox',async()=>{
  const {dom,d,login}=await setup();try{
-  assert.equal(d.querySelector('#selectAll').hidden,true);await login();const header=d.querySelector('thead #selectAll');assert.equal(header.hidden,false);assert.equal(d.querySelector('.bulk-toolbar input[type=checkbox]'),null);
+  assert.equal(d.querySelector('#selectAll').hidden,true);await login();const header=d.querySelector('.roster-table thead #selectAll');assert.equal(header.hidden,false);assert.equal(d.querySelector('.bulk-toolbar input[type=checkbox]'),null);
   header.click();assert.equal(d.querySelectorAll('[data-select]:checked').length,3);assert.equal(header.checked,true);header.click();assert.equal(d.querySelectorAll('[data-select]:checked').length,0);
   d.querySelector('[data-select=one]').click();assert.equal(header.indeterminate,true);header.click();assert.equal(d.querySelectorAll('[data-select]:checked').length,0);
  }finally{dom.window.close();}
@@ -242,7 +246,7 @@ test('header checkbox selects visible eligible records, supports mixed state, an
 
 test('roster displays purpose and approval status instead of shoes; approval remains admin-only',async()=>{
  const {dom,d,login,calls}=await setup({own:true});try{
-  const headers=[...d.querySelectorAll('thead th')].map(x=>x.textContent.trim());assert.ok(headers.includes('방문목적'));assert.ok(headers.includes('가이수'));for(const key of ['gaisu_requested','gaisu_approved','final_approved'])assert.ok(d.querySelector('thead [data-sort='+key+']'));assert.ok(!headers.includes('안전화'));
+  const headers=[...d.querySelectorAll('.roster-table thead th')].map(x=>x.textContent.trim());assert.ok(headers.includes('방문목적'));assert.ok(headers.includes('가이수'));for(const key of ['gaisu_requested','gaisu_approved','final_approved'])assert.ok(d.querySelector('.roster-table thead [data-sort='+key+']'));assert.ok(!headers.includes('안전화'));
   assert.equal(d.querySelector('[data-record="one"] [data-label="방문목적"]').textContent,'회의');assert.equal(d.querySelector('[data-record="one"] [data-approval=final_approved]').checked,false);
   assert.equal(d.querySelector('#approve').hidden,true);await d.querySelector('#approve').onclick();assert.equal(calls.length,0);
   await login();d.querySelector('#reviewer').value='승인 담당자';d.querySelector('[data-select="one"]').click();await d.querySelector('#approve').onclick();assert.equal(calls[0].data.action,'approve');assert.equal(d.querySelector('[data-record="one"] [data-approval=final_approved]').checked,true);assert.match(d.querySelector('[data-record="one"] [data-label="최종 승인"]').textContent,/승인 담당자/);
@@ -265,10 +269,10 @@ test('mail preview copies HTML plus plain fallback and downloads an unsent table
 test('gate column sorts ascending and descending on desktop and mobile without losing selection',async()=>{
  const {dom,d,login,records}=await setup();try{
   await login();records()[0].gate='정문';records()[1].gate='서문';records()[2].gate='정문';await d.querySelector('#refresh').onclick();
-  d.querySelector('[data-select=one]').click();d.querySelector('thead [data-sort=gate]').click();const gates=()=>[...d.querySelectorAll('[data-record] [data-label=출입위치]')].map(x=>x.textContent);
+  d.querySelector('[data-select=one]').click();d.querySelector('.roster-table thead [data-sort=gate]').click();const gates=()=>[...d.querySelectorAll('[data-record] [data-label=출입위치]')].map(x=>x.textContent);
   assert.deepEqual(gates(),['서문','정문','정문']);assert.equal(d.querySelector('[data-sort-heading=gate]').getAttribute('aria-sort'),'ascending');
   d.querySelector('.mobile-sort [data-sort=gate]').click();assert.deepEqual(gates(),['정문','정문','서문']);assert.equal(d.querySelector('[data-select=one]').checked,true);assert.equal(d.querySelector('[data-sort-heading=gate]').getAttribute('aria-sort'),'descending');
-  const headings=[...d.querySelectorAll('thead th')].map(x=>x.textContent);assert.ok(headings[8].includes('방문목적'));assert.ok(headings[9].includes('출입위치'));assert.equal(headings[10],'가이수');
+  const headings=[...d.querySelectorAll('.roster-table thead th')].map(x=>x.textContent);assert.ok(headings[8].includes('방문목적'));assert.ok(headings[9].includes('출입위치'));assert.equal(headings[10],'가이수');
  }finally{dom.window.close();}
 });
 
@@ -286,7 +290,7 @@ test('lunch selection is required, saved per visitor and sortable with a legacy 
  const {dom,d,enter,submit,calls}=await setup({own:true});try{
   d.querySelector('[name=lunch]').value='';enter('purpose','점검');enter('team','팀');enter('name','새 신청');enter('birth','19900123');enter('phone','01000000000');await submit();assert.equal(calls.length,0);assert.equal(d.activeElement.name,'lunch');
   enter('lunch','중식신청');await submit();assert.equal(calls[0].data.items[0].lunch,'중식신청');assert.match(d.querySelector('#list').textContent,/중식신청/);
-  d.querySelector('thead [data-sort=lunch]').click();assert.equal(d.querySelector('[data-sort-heading=lunch]').getAttribute('aria-sort'),'ascending');d.querySelector('.mobile-sort [data-sort=lunch]').click();assert.equal(d.querySelector('[data-sort-heading=lunch]').getAttribute('aria-sort'),'descending');
+  d.querySelector('.roster-table thead [data-sort=lunch]').click();assert.equal(d.querySelector('[data-sort-heading=lunch]').getAttribute('aria-sort'),'ascending');d.querySelector('.mobile-sort [data-sort=lunch]').click();assert.equal(d.querySelector('[data-sort-heading=lunch]').getAttribute('aria-sort'),'descending');
  }finally{dom.window.close();}
 });
 test('applicant checks own first two approval stages and sees immutable actor and Korean timestamp; final is admin-only',async()=>{
@@ -302,8 +306,8 @@ test('applicant checks own first two approval stages and sees immutable actor an
 
 test('grouped approval header sorts each stage by completion and audit time in applicant and admin views',async()=>{
  const {dom,d,login,records}=await setup();try{
-  const group=d.querySelector('thead .approval-group');assert.equal(group.textContent,'가이수');assert.equal(group.colSpan,3);assert.equal(group.scope,'colgroup');
-  assert.equal(d.querySelectorAll('thead tr').length,2);assert.equal(d.querySelectorAll('thead tr:first-child th[rowspan="2"]').length,11);
+  const group=d.querySelector('.roster-table thead .approval-group');assert.equal(group.textContent,'가이수');assert.equal(group.colSpan,3);assert.equal(group.scope,'colgroup');
+  assert.equal(d.querySelectorAll('.roster-table thead tr').length,2);assert.equal(d.querySelectorAll('.roster-table thead tr:first-child th[rowspan="2"]').length,11);
   const ids=()=>[...d.querySelectorAll('[data-record]')].map(r=>r.dataset.record);
   for(const admin of [false,true]){
    if(admin)await login();
@@ -311,7 +315,7 @@ test('grouped approval header sorts each stage by completion and audit time in a
     for(const row of records()){row.status='승인 대기';delete row[stage];}
     records()[0][stage]={by:'처리자',at:'2026-10-15T03:00:00Z'};records()[1][stage]={by:'처리자',at:'2026-10-14T03:00:00Z'};
     await d.querySelector('#refresh').onclick();if(admin)d.querySelector('[data-select=one]').click();
-    d.querySelector('thead [data-sort='+stage+']').click();assert.deepEqual(ids(),['three','two','one']);assert.equal(d.querySelector('[data-sort-heading='+stage+']').getAttribute('aria-sort'),'ascending');
+    d.querySelector('.roster-table thead [data-sort='+stage+']').click();assert.deepEqual(ids(),['three','two','one']);assert.equal(d.querySelector('[data-sort-heading='+stage+']').getAttribute('aria-sort'),'ascending');
     d.querySelector('.mobile-sort [data-sort='+stage+']').click();assert.deepEqual(ids(),['one','two','three']);assert.equal(d.querySelector('[data-sort-heading='+stage+']').getAttribute('aria-sort'),'descending');
     if(admin)assert.equal(d.querySelector('[data-select=one]').checked,true);
    }
@@ -319,5 +323,22 @@ test('grouped approval header sorts each stage by completion and audit time in a
   // A legacy approval without a timestamp still sorts as complete.
   for(const row of records())delete row.final_approved;records()[2].status='승인 완료';await d.querySelector('#refresh').onclick();
   assert.equal(ids()[0],'three');
+ }finally{dom.window.close();}
+});
+
+
+test('contact menu precedes map, shows two contacts and only admins can save synced team options',async()=>{
+ const {dom,d,login,calls}=await setup();try{
+  const team=d.querySelector('[name=team]');assert.equal(team.tagName,'SELECT');assert.equal(team.options[1].textContent,'관리팀 이재훈, 김성석');assert.ok(!team.textContent.includes('@'));assert.ok(!team.textContent.includes('010-'));
+  await d.querySelector('#contactsToggle').onclick();assert.equal(d.querySelector('#contactsDialog').open,true);assert.equal(d.querySelectorAll('#contactsBody tr').length,11);assert.equal(d.querySelector('#editContacts').hidden,true);assert.match(d.querySelector('#contactsBody').textContent,/이재훈/);assert.match(d.querySelector('#contactsBody').textContent,/sskim07@gsenc.com/);
+  await login();assert.equal(d.querySelector('#editContacts').hidden,false);d.querySelector('#editContacts').click();const inputs=d.querySelectorAll('#contactsBody tr:first-child input');inputs[1].value='새 담당자';await d.querySelector('#contactsForm').onsubmit({preventDefault(){}});assert.equal(calls.at(-1).path,'directory');assert.match(d.querySelector('[name=team]').options[1].textContent,/새 담당자, 김성석/);assert.match(d.querySelector('#contactsMessage').textContent,/저장/);
+ }finally{dom.window.close();}
+});
+test('submission routes the saved IDs and separates registration from partial notification failure and retry',async()=>{
+ const {dom,d,enter,submit,notifications,setNotifyResult}=await setup();try{
+  setNotifyResult({results:[{team:'관리팀',channel:'sms',status:'sent'},{team:'관리팀',channel:'email',status:'failed',message:'메일 연결 필요',retryable:true}]});
+  enter('purpose','회의');enter('team','관리팀');enter('name','가상방문자');enter('birth','19900101');enter('phone','01000000000');await submit();
+  assert.equal(notifications.length,1);assert.equal(notifications[0].ids[0],'new0');assert.equal(d.querySelector('[name=name]').value,'');assert.match(d.querySelector('#notificationResult').textContent,/신청은 저장/);assert.match(d.querySelector('#notificationResult').textContent,/이메일: 메일 연결 필요/);assert.equal(d.querySelector('#retryNotifications').hidden,false);
+  setNotifyResult({results:[{team:'관리팀',channel:'sms',status:'sent'},{team:'관리팀',channel:'email',status:'sent'}]});await d.querySelector('#retryNotifications').onclick();assert.equal(notifications.length,2);assert.match(d.querySelector('#notificationResult').textContent,/발송 요청이 접수/);assert.equal(d.querySelector('#retryNotifications').hidden,true);
  }finally{dom.window.close();}
 });

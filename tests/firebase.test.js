@@ -1,3 +1,5 @@
+import {createNotifyHandler} from '../functions/lib/http.js';
+import {getFirestore as getAdminFirestore,Timestamp as AdminTimestamp} from 'firebase-admin/firestore';
 import {test, before, after} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -200,4 +202,33 @@ test('lunch and approval stages enforce owner/admin rights, server audit times, 
   original=(await getDoc(doc(adminDb,'requests',mine.id))).data();await assertFails(forge({final_approved:{by:'위조',at:serverTimestamp()}}));
   await service.api('logout',{});
  }finally{await deleteApp(owner.app);await deleteApp(stranger.app);}
+});
+
+test('team directory is public, admin-managed, versioned and validates both contacts',async()=>{
+ const defaults=await outsider.api('directory');assert.equal(defaults.version,0);assert.equal(defaults.teams.length,11);
+ await assert.rejects(()=>outsider.api('directory',{teams:defaults.teams,version:0}),/관리자/);
+ const publicDb=env.unauthenticatedContext().firestore();await assertFails(setDoc(doc(publicDb,'contactTeams','forged'),{name:'위조',order:0,contacts:defaults.teams[0].contacts}));
+ await assertFails(getDoc(doc(publicDb,'notificationJobs','private-job')));await assertFails(setDoc(doc(publicDb,'notificationClaims','forged'),{job:'forged'}));
+ await service.api('login',{password:'test-only-password'});const teams=structuredClone(defaults.teams);teams[0].contacts[0].name='변경 담당자';
+ const saved=await service.api('directory',{teams,version:0});assert.equal(saved.version,1);assert.equal((await outsider.api('directory')).teams[0].contacts[0].name,'변경 담당자');
+ await assert.rejects(()=>service.api('directory',{teams,version:0}),/변경/);
+ const adminDb=env.authenticatedContext(ADMIN_UID).firestore();await assertFails(setDoc(doc(adminDb,'contactTeams','invalid'),{name:'잘못된 팀',order:0,contacts:[{name:'',phone:'bad',email:'bad'},teams[0].contacts[1]]}));
+ await service.api('requests',{author_name:'팀 선택 검증',items:[{...item,team:teams[0].name,team_id:teams[0].id,lunch:'미신청'}]});const own=(await service.api('requests')).find(r=>r.author_name==='팀 선택 검증');assert.equal(own.team_id,'management');
+ await service.api('logout',{});
+});
+
+
+test('notification HTTP handler verifies ownership and atomically prevents duplicate or overlapping delivery',async()=>{
+ const owner=createPermitAPI({config:{apiKey:'demo-key',projectId:project},emulator:true,name:'notification-owner',ownerKey:'1'.repeat(64)});const db=getAdminFirestore(adminApp);let sends=0;
+ const invoke=async(handler,ids,key)=>{let status=200,result;const res={set(){return this;},status(value){status=value;return this;},json(value){result=value;}};await handler({method:'POST',body:{ids,ownerKey:key},ip:'test-ip'},res);return {status,result};};
+ try{
+  const submitted=await owner.api('requests',{author_name:'알림 검증',items:[{...item,team:'관리팀',team_id:'management'}]});
+  const missing=createNotifyHandler({db,Timestamp:AdminTimestamp,getConfig:()=>({})});
+  assert.equal((await invoke(missing,submitted.ids,'2'.repeat(64))).status,400);
+  const failed=await invoke(missing,submitted.ids,'1'.repeat(64));assert.equal(failed.status,200);assert.equal(failed.result.results.length,4);assert.ok(failed.result.results.every(r=>r.status==='failed'&&r.retryable));
+  const configured=createNotifyHandler({db,Timestamp:AdminTimestamp,getConfig:()=>({}),send:async()=>{sends++;return 'fake-receipt';}});
+  const done=await invoke(configured,submitted.ids,'1'.repeat(64));assert.equal(done.status,200);assert.ok(done.result.results.every(r=>r.status==='sent'));assert.equal(sends,4);assert.equal(done.result.results[0].to,undefined);assert.equal(done.result.results[0].html,undefined);
+  await invoke(configured,submitted.ids,'1'.repeat(64));assert.equal(sends,4);
+  const another=await owner.api('requests',{author_name:'알림 검증',items:[{...item,team:'관리팀',team_id:'management'}]});const overlap=await invoke(configured,[...submitted.ids,...another.ids],'1'.repeat(64));assert.equal(overlap.status,400);assert.match(overlap.result.message,/이미 발송/);assert.equal(sends,4);
+ }finally{await deleteApp(owner.app);await db.terminate();}
 });

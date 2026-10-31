@@ -29,6 +29,8 @@ jobs:
           java-version: '21'
       - run: npm ci
       - run: npm run build
+      - run: npm ci --prefix functions
+      - run: npm test --prefix functions
       - run: npm run test:ui
       - run: node --test tests/hosting.test.js
       - name: Test Firebase authentication and Firestore rules locally
@@ -68,7 +70,7 @@ jobs:
     name: Publish website and Firestore rules
     needs: test
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - name: Check deployment credential is connected
@@ -108,6 +110,18 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           project_id: permit-daesan-461e8
+      - name: Configure and publish automatic team notifications when connected
+        env:
+          PERMIT_NOTIFICATION_CONFIG: ${{ secrets.PERMIT_NOTIFICATION_CONFIG }}
+          FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true'
+        run: |
+          if [ -z "$PERMIT_NOTIFICATION_CONFIG" ]; then
+            echo '::notice::Automatic notifications need PERMIT_NOTIFICATION_CONFIG (SOLAPI and Microsoft 365). Directory features will deploy; automatic delivery remains unavailable until configured.'
+          else
+            npm ci --prefix functions
+            node scripts/configure-notifications.mjs
+            npx --no-install firebase deploy --only functions:permit-notifications --project permit-daesan-461e8 --non-interactive
+          fi
       - name: Deploy tested website and access rules
         run: npx --no-install firebase deploy --only hosting,firestore:rules --project permit-daesan-461e8 --non-interactive
         env:

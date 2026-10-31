@@ -178,3 +178,11 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
  .table-wrap table.roster-table .approval-record time,.table-wrap table.roster-table .approval-record small{font-size:11px}
 }
 @media(max-width:720px){.roster-table colgroup{display:none}}
+
+/* Team contacts stay in a dialog; request fields show only team and names. */
+#contactsDialog{width:min(1280px,96vw)}.contacts-table-wrap{overflow:auto;max-height:60vh}.contacts-table{min-width:1050px}.contacts-table th,.contacts-table td{padding:12px 9px;border:1px solid #dce5df;font-size:13px}.contacts-table a{color:#216c8b;overflow-wrap:anywhere}.contacts-table input{margin:0;font-size:13px;min-width:110px}.notification-result{padding:13px;margin:12px 0;border:1px solid #a8ceba;border-radius:7px;background:#edf8f1;color:#245d40;line-height:1.7}.notification-error{border-color:#d9b28d;background:#fff6e9;color:#874d21}
+@media(max-width:720px){.heading .gate-maps{flex-wrap:wrap}.heading .gate-map{flex:1 1 45%}#contactsDialog{padding:16px}.contacts-table{min-width:0}.contacts-table thead{display:none}.contacts-table tr{display:grid;grid-template-columns:1fr 1fr}.contacts-table td{display:block;min-width:0;border:0;padding:0}.contacts-table td:first-child{grid-column:1/-1;font-weight:bold}.contacts-table td::before{content:attr(data-label);display:block;font-size:11px;color:#809387}.contacts-table input{width:100%;min-width:0;font-size:16px}.contacts-table a{font-size:12px}}
+
+@media(max-width:720px){.contacts-table td:nth-child(2),.contacts-table td:nth-child(5){grid-column:1/-1;padding-top:8px;font-weight:600}.contacts-table td:nth-child(8){grid-column:1/-1}}
+
+@media(min-width:721px){.contacts-table th:first-child,.contacts-table td:first-child{min-width:120px}.contacts-table th:nth-child(3),.contacts-table th:nth-child(6){min-width:150px}.contacts-table th:nth-child(4),.contacts-table th:nth-child(7){min-width:230px}.contacts-table button[data-remove-team]{min-width:80px;white-space:nowrap}.contacts-table input{padding:10px 7px}}

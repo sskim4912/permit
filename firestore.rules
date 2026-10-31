@@ -7,7 +7,7 @@ service cloud.firestore {
     function text(value) { return value is string && value.size() <= 200; }
     function valid(d) {
       return d.keys().hasAll(['visit_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team','status','reviewer','version','created'])
-        && d.keys().hasOnly(['visit_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team','status','reviewer','version','created','delivery_at','visit_end_date','author_name','owner_key','modified_by','modified_at','lunch','gaisu_requested','gaisu_approved','final_approved'])
+        && d.keys().hasOnly(['visit_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team','status','reviewer','version','created','delivery_at','visit_end_date','author_name','owner_key','modified_by','modified_at','team_id','lunch','gaisu_requested','gaisu_approved','final_approved'])
         && (!('delivery_at' in d) || (d.delivery_at is timestamp && d.delivery_at <= request.time))
         && ((!('author_name' in d) && !('owner_key' in d)) || (d.author_name is string && d.author_name.size() > 0 && d.author_name.size() <= 50 && d.owner_key is string && d.owner_key.matches('^[a-f0-9]{64}$')))
         && ((!('modified_by' in d) && !('modified_at' in d)) || (d.modified_by is string && d.modified_by.size() > 0 && d.modified_by.size() <= 50 && d.modified_at is timestamp && d.modified_at <= request.time))
@@ -23,6 +23,7 @@ service cloud.firestore {
         && d.shoes in ['필요없음','230','235','240','245','250','255','260','265','270','275','280','285','290','295','300']
         && d.status in ['승인 대기','현장 제출','현장 확인','발주처 제출','승인 완료']
         && d.reviewer is string && d.reviewer.size() <= 50
+        && (!('team_id' in d) || (d.team_id is string && d.team_id.matches('^[a-zA-Z0-9_-]{1,60}$')))
         && (!('lunch' in d) || d.lunch in ['중식신청','미신청'])
         // New stamps are validated in keepStages; existing stamps must remain identical.
         && (!('final_approved' in d) || d.status == '승인 완료')
@@ -59,7 +60,7 @@ service cloud.firestore {
     }
     function ownerChange(before, after) {
       return ('owner_key' in before) && pending(before) && after.owner_key == before.owner_key
-        && after.diff(before).affectedKeys().hasOnly(['visit_date','visit_end_date','purpose','team','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','lunch','version','modified_by','modified_at'])
+        && after.diff(before).affectedKeys().hasOnly(['visit_date','visit_end_date','purpose','team','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','lunch','team_id','version','modified_by','modified_at'])
         && after.modified_by == before.author_name && after.modified_at == request.time;
     }
     function deletedLog(id, before) {
@@ -117,6 +118,20 @@ service cloud.firestore {
           && pending(get(/databases/$(database)/documents/requests/$(id)).data)
           && !existsAfter(/databases/$(database)/documents/requests/$(id))));
     }
+    function contact(c) { return c is map && c.keys().hasAll(['name','phone','email']) && c.keys().hasOnly(['name','phone','email']) && c.name is string && c.name.size()>0 && c.name.size()<=50 && c.phone is string && c.phone.matches('^01[016789]-[0-9]{3,4}-[0-9]{4}$') && c.email is string && c.email.size()<=254 && c.email.matches('^[^\\s@<>;,]+@[^\\s@<>;,]+[.][^\\s@<>;,]+$'); }
+    match /contactTeams/{id} {
+      allow read: if true;
+      allow create, update: if isAdmin() && id.matches('^[a-zA-Z0-9_-]{1,60}$') && request.resource.data.keys().hasAll(['name','order','contacts']) && request.resource.data.keys().hasOnly(['name','order','contacts']) && request.resource.data.name is string && request.resource.data.name.size()>0 && request.resource.data.name.size()<=50 && request.resource.data.order is int && request.resource.data.order>=0 && request.resource.data.order<30 && request.resource.data.contacts is list && request.resource.data.contacts.size()==2 && contact(request.resource.data.contacts[0]) && contact(request.resource.data.contacts[1]);
+      allow delete: if isAdmin();
+    }
+    match /settings/contactDirectory {
+      allow read: if true;
+      allow create, update: if isAdmin() && request.resource.data.keys().hasOnly(['version','modified_at']) && request.resource.data.version is int && request.resource.data.version == (resource == null ? 1 : resource.data.version+1) && request.resource.data.modified_at==request.time;
+    }
+    // Notification claims, results and rate limits are server-only.
+    match /notificationJobs/{id} { allow read, write: if false; }
+    match /notificationClaims/{id} { allow read, write: if false; }
+    match /notificationLimits/{id} { allow read, write: if false; }
     match /settings/mail {
       allow read: if isAdmin();
       allow create, update: if isAdmin()
