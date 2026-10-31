@@ -191,3 +191,16 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
 @media(min-width:721px){.heading .gate-maps{grid-template-columns:repeat(4,minmax(0,1fr));width:min(100%,766px)}}
 @media(min-width:721px) and (max-width:1000px){.heading .gate-map{font-size:12px;padding:0 8px;gap:5px}.heading .gate-map .external-arrow{display:none}}
 @media(max-width:720px){#siteMapToggle{grid-column:auto}}
+
+/* Approved A palette: sage contacts, teal site map, blue west gate, sand VIP gate. */
+.heading .gate-map{background:var(--menu-bg);border-color:var(--menu-border);color:var(--menu-text)}
+.heading .gate-map svg{color:inherit}
+.heading .gate-map:hover{background:var(--menu-hover);border-color:var(--menu-border)}
+#contactsToggle{--menu-bg:#edf4f0;--menu-border:#c5d8cc;--menu-text:#35634f;--menu-hover:#e1ebe5}
+#siteMapToggle{--menu-bg:#eaf3f3;--menu-border:#c3d8d8;--menu-text:#356365;--menu-hover:#dceaea}
+.gate-map[data-menu="west"]{--menu-bg:#eef3fa;--menu-border:#cad7ea;--menu-text:#3f608b;--menu-hover:#e0e9f5}
+.gate-map[data-menu="vip"]{--menu-bg:#f7f2e8;--menu-border:#e3d5b6;--menu-text:#79613c;--menu-hover:#efe6d5}
+@media(min-width:721px){.heading .gate-maps{width:min(100%,856px)}}
+@media(min-width:721px) and (max-width:1000px){.heading .gate-map .external-arrow{display:block}.heading .gate-map{padding:0 6px;gap:4px}}
+@media(min-width:721px) and (max-width:800px){.heading .gate-map{font-size:11px;padding:0 5px}.heading .gate-map svg{width:15px;height:15px}}
+@media(max-width:380px){.heading .gate-map{font-size:11.5px;padding:0 5px;gap:4px}.heading .gate-map svg{width:15px;height:15px}}
