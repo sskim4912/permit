@@ -229,6 +229,7 @@ test('notification HTTP handler verifies ownership and atomically prevents dupli
   const configured=createNotifyHandler({db,Timestamp:AdminTimestamp,getConfig:()=>({}),send:async()=>{sends++;return 'fake-receipt';}});
   const done=await invoke(configured,submitted.ids,'1'.repeat(64));assert.equal(done.status,200);assert.ok(done.result.results.every(r=>r.status==='sent'));assert.equal(sends,4);assert.equal(done.result.results[0].to,undefined);assert.equal(done.result.results[0].html,undefined);
   await invoke(configured,submitted.ids,'1'.repeat(64));assert.equal(sends,4);
+  const smsOnly=await owner.api('requests',{author_name:'문자 단독 검증',items:[{...item,team:'관리팀',team_id:'management'}]});const smsHandler=createNotifyHandler({db,Timestamp:AdminTimestamp,getConfig:()=>({solapi:{}}),send:async task=>{assert.equal(task.channel,'sms');return 'fake-sms';}});const smsDone=await invoke(smsHandler,smsOnly.ids,'1'.repeat(64));assert.equal(smsDone.status,200);assert.equal(smsDone.result.results.length,2);assert.ok(smsDone.result.results.every(r=>r.status==='sent'&&r.channel==='sms'));
   const another=await owner.api('requests',{author_name:'알림 검증',items:[{...item,team:'관리팀',team_id:'management'}]});const overlap=await invoke(configured,[...submitted.ids,...another.ids],'1'.repeat(64));assert.equal(overlap.status,400);assert.match(overlap.result.message,/이미 발송/);assert.equal(sends,4);
  }finally{await deleteApp(owner.app);await db.terminate();}
 });

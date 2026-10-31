@@ -2,7 +2,23 @@
 
 담당자 표는 관리자 모드의 ‘출입신청 담당자 보기 → 담당자 정보 수정’에서 관리합니다. 요청팀 목록은 ‘팀명 이름, 이름’으로 표시되며 전화번호·이메일은 표에서만 표시합니다. 기존 신청의 요청팀 문자열은 유지됩니다.
 
-신규 신청 저장 후 서버가 신청 원본과 브라우저 소유 키를 검증하고 선택한 팀의 담당자 두 명에게 솔라피 문자(LMS)와 Microsoft 365 HTML 표 이메일을 전송합니다. 수신 주소·본문은 서버가 저장된 자료로 구성하며 클라이언트가 수신자를 임의로 지정하지 못합니다. 수정 저장·과거 신청·담당자 수정만으로는 알림을 보내지 않습니다.
+신규 신청 저장 후 서버가 신청 원본과 브라우저 소유 키를 검증하고 선택한 팀의 담당자 두 명에게 연결된 채널(솔라피 문자/LMS, Microsoft 365 HTML 표 이메일)로 전송합니다. 수신 주소·본문은 서버가 저장된 자료로 구성하며 클라이언트가 수신자를 임의로 지정하지 못합니다. 수정 저장·과거 신청·담당자 수정만으로는 알림을 보내지 않습니다.
+
+## 솔라피부터 연결할 때
+
+Microsoft 365 없이 문자부터 활성화할 수 있습니다. 솔라피 콘솔에서 발신번호 등록·인증, API Key/API Secret 발급, LMS 잔액을 준비합니다. 이후 GitHub 저장소 Settings → Secrets and variables → Actions에 `PERMIT_NOTIFICATION_CONFIG`를 다음 JSON으로 저장하세요. 실제 키는 채팅에 보내지 마세요.
+
+```json
+{
+  "solapi": {
+    "apiKey": "솔라피 API Key",
+    "apiSecret": "솔라피 API Secret",
+    "from": "솔라피에 등록·인증된 발신번호"
+  }
+}
+```
+
+GitHub Actions에서 `Test and deploy Firebase`를 `permit-firebase-setup` 브랜치로 실행합니다. 아래 Firebase 요금제·권한 조건은 문자만 연결할 때도 필요합니다. 발송 설정이 솔라피뿐이면 문자를 보내고 문자 결과만 표시합니다. 미연결 이메일을 실패로 표시하거나 발송 완료라고 표시하지 않습니다. 나중에 동일 JSON에 `microsoft365` 항목을 추가하면 이후 새 신청부터 이메일도 발송합니다. 기존 문자 발송 건에 이메일을 소급 발송하지 않습니다.
 
 ## 운영 연결에 필요한 설정
 
@@ -30,7 +46,7 @@
 }
 ```
 
-6. GitHub Actions의 **Test and deploy Firebase → Run workflow**에서 `permit-firebase-setup` 브랜치를 실행합니다. 설정이 있으면 CI가 Firebase Secret Manager에 저장하고 알림 함수를 배포한 뒤 사이트를 배포합니다. 설정이 없으면 담당자/팀 선택 화면만 배포하며 자동 발송은 오류 메시지로 안내합니다. 관리자 수정 화면은 API 키 저장 장소가 아닙니다.
+6. GitHub Actions의 **Test and deploy Firebase → Run workflow**에서 `permit-firebase-setup` 브랜치를 실행합니다. 설정이 있으면 CI가 Firebase Secret Manager에 저장하고 사이트를 검증한 뒤 알림 함수를 배포합니다. 설정이 없으면 담당자/팀 선택 화면만 배포하며 자동 발송은 오류 메시지로 안내합니다. 관리자 수정 화면은 API 키 저장 장소가 아닙니다.
 
 ## 결과와 재시도
 

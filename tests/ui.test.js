@@ -342,3 +342,7 @@ test('submission routes the saved IDs and separates registration from partial no
   setNotifyResult({results:[{team:'관리팀',channel:'sms',status:'sent'},{team:'관리팀',channel:'email',status:'sent'}]});await d.querySelector('#retryNotifications').onclick();assert.equal(notifications.length,2);assert.match(d.querySelector('#notificationResult').textContent,/발송 요청이 접수/);assert.equal(d.querySelector('#retryNotifications').hidden,true);
  }finally{dom.window.close();}
 });
+
+test('SMS-only success never reports that email was sent',async()=>{
+ const {dom,d,enter,submit,setNotifyResult}=await setup();try{setNotifyResult({results:[{team:'관리팀',channel:'sms',status:'sent'}]});enter('purpose','점검');enter('team','관리팀');enter('name','가상방문자');enter('birth','19900101');enter('phone','01000000000');await submit();assert.match(d.querySelector('#notificationResult').textContent,/문자 발송 요청이 접수/);assert.ok(!d.querySelector('#notificationResult').textContent.includes('이메일'));assert.equal(d.querySelector('#retryNotifications').hidden,true);}finally{dom.window.close();}
+});
