@@ -127,6 +127,5 @@ jobs:
             echo '::notice::Automatic notifications need PERMIT_NOTIFICATION_CONFIG (SOLAPI or Microsoft 365). Directory features will deploy; automatic delivery remains unavailable until configured.'
           else
             npm ci --prefix functions
-            node scripts/configure-notifications.mjs
-            npx --no-install firebase deploy --only functions:permit-notifications --project permit-daesan-461e8 --non-interactive
+            node scripts/configure-notifications.mjs --deploy
           fi
