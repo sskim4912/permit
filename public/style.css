@@ -161,3 +161,20 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
 .approval-record>span{display:grid;gap:3px;text-align:center;max-width:115px;overflow-wrap:anywhere}.approval-record strong{font-size:13px;color:#2c5b43}.approval-record time,.approval-record small{font-size:12px;color:#6a7f72;line-height:1.5}
 @media(max-width:720px){.table-wrap table th:nth-child(n+11){min-width:0}.table-wrap td.approval-cell{grid-column:1/-1;background:#f2f7f4;border-radius:7px;padding:12px}.approval-record{gap:14px}.approval-record>span{max-width:none}.approval-record strong{font-size:14px}.approval-record time,.approval-record small{font-size:13px}.mobile-sort{gap:6px}.mobile-sort button{padding:9px 8px}}
 .meal-hint{font-size:11px;line-height:1.5;margin-top:5px;color:#6c8276}
+
+/* Two-tier approval header, with all desktop columns sharing the panel width. */
+@media(min-width:721px){
+ .table-wrap table.roster-table{table-layout:fixed;min-width:1180px}
+ .table-wrap table.roster-table th,.table-wrap table.roster-table td{width:auto;min-width:0;padding:12px 5px;font-size:13px;overflow-wrap:anywhere}
+ .table-wrap table.roster-table th{font-size:13px}
+ .table-wrap table.roster-table .sort-button{min-height:34px;padding:5px;font-size:13px;max-width:100%}
+ .table-wrap table.roster-table .approval-group{padding:8px 5px;border-bottom:1px solid #c9d8cf;letter-spacing:3px}
+ .table-wrap table.roster-table .approval-headings th{padding:7px 3px}
+ .table-wrap table.roster-table .number-choice{gap:5px}
+ .table-wrap table.roster-table .record-info summary{font-size:12px}
+ .table-wrap table.roster-table .approval-record{flex-direction:column;gap:5px}
+ .table-wrap table.roster-table .approval-record>span{max-width:100%;gap:2px}
+ .table-wrap table.roster-table .approval-record strong{font-size:12px}
+ .table-wrap table.roster-table .approval-record time,.table-wrap table.roster-table .approval-record small{font-size:11px}
+}
+@media(max-width:720px){.roster-table colgroup{display:none}}

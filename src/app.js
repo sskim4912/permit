@@ -57,17 +57,19 @@ function renderWeek(){
 function setWeekFor(value){const monday=value=>{const d=new Date(value+'T12:00:00Z');d.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7));return d.getTime();};weekOffset=Math.round((monday(value)-monday(today))/604800000);allWeeks=false;}
 function matchesFilters(row){const [start,end]=weekRange();return (allWeeks||(row.visit_date<=end&&endDate(row)>=start))&&(!$('statusFilter').value||statusLabel(row)===$('statusFilter').value)&&(!$('dateFilter').value||(row.visit_date<=$('dateFilter').value&&endDate(row)>=$('dateFilter').value))&&[row.name||'',row.team,row.purpose,row.author_name||'',row.plate||''].some(value=>value.toLowerCase().includes($('search').value.toLowerCase()));}
 let sortField='visit_date',sortDirection='desc';
+const approvalSortLabels={gaisu_requested:'신청',gaisu_approved:'승인',final_approved:'최종승인'};
+const approvalDone=(row,key)=>!!row[key]||(key==='final_approved'&&row.status==='승인 완료');
 const nameCollator=new Intl.Collator('ko',{numeric:true,sensitivity:'base'});
 function sortRows(data){return data.sort((a,b)=>{
- const primary=sortField!=='visit_date'?nameCollator.compare(a[sortField]||'',b[sortField]||''):(a.visit_date||'').localeCompare(b.visit_date||'');
+ const primary=sortField in approvalSortLabels?(Number(approvalDone(a,sortField))-Number(approvalDone(b,sortField))||String(a[sortField]?.at||'').localeCompare(String(b[sortField]?.at||''))):sortField!=='visit_date'?nameCollator.compare(a[sortField]||'',b[sortField]||''):(a.visit_date||'').localeCompare(b.visit_date||'');
  return primary*(sortDirection==='asc'?1:-1)||(b.created||'').localeCompare(a.created||'')||String(a.id).localeCompare(String(b.id));
 });}
 function visibleRows(){return sortRows(rows.filter(matchesFilters));}
 function renderSort(){
  for(const button of document.querySelectorAll('[data-sort]')){
-  const field=button.dataset.sort,active=field===sortField,label={name:'이름',gate:'출입위치',lunch:'식사신청(중식)',visit_date:'출입날짜'}[field];
+  const field=button.dataset.sort,active=field===sortField,label=approvalSortLabels[field]?(button.closest('.mobile-sort')&&field!=='final_approved'?'가이수 ':'')+approvalSortLabels[field]:{name:'이름',gate:'출입위치',lunch:'식사신청(중식)',visit_date:'출입날짜'}[field];
   button.textContent=label+' '+(active?(sortDirection==='asc'?'▲':'▼'):'↕');button.classList.toggle('is-active',active);
-  button.setAttribute('aria-label',label+' '+(active&&sortDirection==='asc'?'내림차순':'오름차순')+'으로 정렬');
+  button.setAttribute('aria-label',(field in approvalSortLabels&&field!=='final_approved'?'가이수 '+approvalSortLabels[field]:label)+' '+(active&&sortDirection==='asc'?'내림차순':'오름차순')+'으로 정렬');
  }
  for(const heading of document.querySelectorAll('[data-sort-heading]'))heading.setAttribute('aria-sort',heading.dataset.sortHeading===sortField?(sortDirection==='asc'?'ascending':'descending'):'none');
 }
@@ -82,7 +84,7 @@ function updateSelection(){
 function attachEditor(){if(!editing)return;const row=[...$('list').querySelectorAll('[data-record]')].find(row=>row.dataset.record===editing.id);if(!row)return;const tr=document.createElement('tr');tr.className='inline-editor-row';const cell=document.createElement('td');cell.colSpan=columnCount();tr.append(cell);row.after(tr);cell.append($('requestPanel'));$('requestPanel').classList.add('inline-editor');}
 const approvalStages=[['gaisu_requested','가이수 신청'],['gaisu_approved','가이수 승인'],['final_approved','최종 승인']];
 function approvalCell(row,key,label){
- const record=row[key],done=!!record||(key==='final_approved'&&row.status==='승인 완료');
+ const record=row[key],done=approvalDone(row,key);
  const allowed=admin||(row.own&&key!=='final_approved'&&row.status!=='승인 완료'&&!row.final_approved);
  const stamp=record?`<strong>${esc(record.by)}</strong><time>${esc(new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(record.at?.toDate?.()||record.at)))}</time>`:done?'<small>기존 승인 기록</small>':'<small>미처리</small>';
  return `<td data-label="${label}" class="approval-cell"><div class="approval-record"><input type="checkbox" data-approval="${key}" data-id="${esc(row.id)}" aria-label="${esc(row.name||'신청')} ${label}" ${done?'checked':''} ${!allowed||done||busy?'disabled':''}><span>${stamp}</span></div></td>`;
