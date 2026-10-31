@@ -7,7 +7,7 @@ let config,folder;
 const values=[];
 const collect=value=>{if(typeof value==='string'&&value)values.push(value);else if(value&&typeof value==='object')Object.values(value).forEach(collect);};
 const redact=value=>values.sort((a,b)=>b.length-a.length).reduce((text,secret)=>text.split(secret).join('[REDACTED]'),String(value));
-function firebase(args){try{const output=execFileSync('npx',['--no-install','firebase',...args,'--project','permit-daesan-461e8','--non-interactive'],{encoding:'utf8',maxBuffer:10*1024*1024});if(output)console.log(redact(output));}catch(error){throw Error(redact(String(error.stdout||'')+'\n'+String(error.stderr||''))||'Firebase notification deployment failed.');}}
+function firebase(args){try{const output=execFileSync('npx',['--no-install','firebase',...args,'--project','permit-daesan-461e8','--non-interactive'],{stdio:'pipe',encoding:'utf8',maxBuffer:10*1024*1024});if(output)console.log(redact(output));}catch(error){throw Error(redact(String(error.stdout||'')+'\n'+String(error.stderr||''))||'Firebase notification deployment failed.');}}
 try{
  try{config=JSON.parse(process.env.PERMIT_NOTIFICATION_CONFIG||'');}catch(e){throw Error('PERMIT_NOTIFICATION_CONFIG must be valid JSON.');}
  collect(config);validateNotificationConfig(config);
