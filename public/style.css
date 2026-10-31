@@ -186,3 +186,8 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
 @media(max-width:720px){.contacts-table td:nth-child(2),.contacts-table td:nth-child(5){grid-column:1/-1;padding-top:8px;font-weight:600}.contacts-table td:nth-child(8){grid-column:1/-1}}
 
 @media(min-width:721px){.contacts-table th:first-child,.contacts-table td:first-child{min-width:120px}.contacts-table th:nth-child(3),.contacts-table th:nth-child(6){min-width:150px}.contacts-table th:nth-child(4),.contacts-table th:nth-child(7){min-width:230px}.contacts-table button[data-remove-team]{min-width:80px;white-space:nowrap}.contacts-table input{padding:10px 7px}}
+
+/* Keep the four heading actions together on desktop. */
+@media(min-width:721px){.heading .gate-maps{grid-template-columns:repeat(4,minmax(0,1fr));width:min(100%,766px)}}
+@media(min-width:721px) and (max-width:1000px){.heading .gate-map{font-size:12px;padding:0 8px;gap:5px}.heading .gate-map .external-arrow{display:none}}
+@media(max-width:720px){#siteMapToggle{grid-column:auto}}
