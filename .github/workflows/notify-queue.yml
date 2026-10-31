@@ -34,7 +34,7 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           project_id: permit-daesan-461e8
-      - name: Send only queued new submissions
+      - name: Check credentials and send only queued new submissions
         env:
           PERMIT_NOTIFICATION_CONFIG: ${{ secrets.PERMIT_NOTIFICATION_CONFIG }}
         run: |
