@@ -15,3 +15,7 @@ test('missing channels produce errors rather than false completion',async()=>{fo
 test('SOLAPI can be configured before Microsoft 365 and incomplete supplied services are rejected',async()=>{
  const {validateNotificationConfig,enabledChannels}=await import('../lib/config.js');const sms={solapi:config().solapi};assert.equal(validateNotificationConfig(sms),sms);assert.deepEqual(enabledChannels(sms),['sms']);assert.deepEqual(enabledChannels(config()),['sms','email']);assert.throws(()=>validateNotificationConfig({}));assert.throws(()=>validateNotificationConfig({solapi:{apiKey:'fake'}}));assert.throws(()=>validateNotificationConfig({...sms,microsoft365:{}}));
 });
+
+test('SOLAPI connection check uses a read-only balance API and never sends a message',async()=>{
+ const {checkSolapi}=await import('../lib/solapi-check.js');let call;assert.equal(await checkSolapi(config(),{fetchImpl:async(url,options)=>{call={url,...options};return {ok:true};}}),true);assert.equal(call.url,'https://api.solapi.com/cash/v1/balance');assert.equal(call.method,'GET');assert.equal(call.body,undefined);assert.match(call.headers.Authorization,/^HMAC-SHA256/);await assert.rejects(()=>checkSolapi(config(),{fetchImpl:async()=>({ok:false,status:401})}),/HTTP 401/);
+});
