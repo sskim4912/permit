@@ -38,7 +38,9 @@ jobs:
         env:
           PERMIT_NOTIFICATION_CONFIG: ${{ secrets.PERMIT_NOTIFICATION_CONFIG }}
         run: |
-          if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" = "push" ]; then
+            node functions/worker.js --check-solapi --check-only
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             node functions/worker.js --check-solapi
           else
             node functions/worker.js
