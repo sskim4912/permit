@@ -5,7 +5,7 @@ import {jobId,buildPlan,publicResults,dispatchTasks,sendTask} from './notificati
 const hash=value=>createHash('sha256').update(value).digest('hex');
 export async function processNotificationQueue({db,Timestamp,config,send=sendTask,clock=Date.now,limit=5}){
  const meta=await db.doc('settings/contactDirectory').get();const teams=meta.exists?validateTeams((await db.collection('contactTeams').get()).docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.order-b.order)):defaultTeams;
- const queues=await db.collection('notificationQueue').where('status','in',['pending','retry','processing']).limit(limit).get();let processed=0;
+ const queues=await db.collection('notificationQueue').where('status','in',['pending','retry','processing']).limit(limit).get();let processed=0,attempted=0,accepted=0,failed=0,unknown=0;
  for(const snapshot of queues.docs){
   const queueRef=snapshot.ref,now=clock();let ownerKey,jobRef,started=false;
   try{
@@ -25,15 +25,16 @@ export async function processNotificationQueue({db,Timestamp,config,send=sendTas
    if(!claim)continue;started=true;
    const receipt=db.doc(`applicantCopies/${ownerKey}/notificationReceipts/${queueRef.id}`);
    const save=async tasks=>{const batch=db.batch();batch.update(jobRef,{tasks});batch.set(receipt,{results:publicResults(tasks).map(r=>r.status==='sending'?{...r,status:'pending',message:'발송을 처리 중입니다.'}:r),updated_at:Timestamp.now()});await batch.commit();};
-   await dispatchTasks({id:claim.id,tasks:claim.tasks,send:(task,key)=>send(task,config,{deliveryKey:key}),save});
+   await dispatchTasks({id:claim.id,tasks:claim.tasks,send:async(task,key)=>{attempted++;const receipt=await send(task,config,{deliveryKey:key});accepted++;return receipt;},save});
    if(claim.attempts>=3)for(const task of claim.tasks)if(task.status==='failed'&&task.retryable){task.retryable=false;task.message+=' 재시도 한도에 도달했습니다. 관리자에게 문의해 주세요.';}
+   failed+=claim.tasks.filter(t=>t.status==='failed').length;unknown+=claim.tasks.filter(t=>t.status==='unknown').length;
    await save(claim.tasks);const retry=claim.tasks.some(t=>t.status==='failed'&&t.retryable);const batch=db.batch();batch.update(queueRef,{status:retry?'retry':'done',leaseUntil:Timestamp.fromMillis(0),updated_at:Timestamp.now()});batch.update(jobRef,{leaseUntil:Timestamp.fromMillis(0)});await batch.commit();processed++;
   }catch(error){
    // A write failure after dispatch keeps its lease and audit state for safe recovery.
    if(error.code)throw error;
    if(started)throw Error('알림 기록 처리 오류입니다. 다음 실행에서 중복 없이 확인합니다.');
-   const batch=db.batch();batch.update(queueRef,{status:'done',error:'신청 정보 또는 담당자 정보를 확인해 주세요.',leaseUntil:Timestamp.fromMillis(0)});if(ownerKey&&/^[a-f0-9]{64}$/.test(ownerKey))batch.set(db.doc(`applicantCopies/${ownerKey}/notificationReceipts/${queueRef.id}`),{results:[{team:'담당자',channel:'sms',status:'failed',retryable:false,message:error.message}],updated_at:Timestamp.now()});await batch.commit();processed++;
+   const batch=db.batch();batch.update(queueRef,{status:'done',error:'신청 정보 또는 담당자 정보를 확인해 주세요.',leaseUntil:Timestamp.fromMillis(0)});if(ownerKey&&/^[a-f0-9]{64}$/.test(ownerKey))batch.set(db.doc(`applicantCopies/${ownerKey}/notificationReceipts/${queueRef.id}`),{results:[{team:'담당자',channel:'sms',status:'failed',retryable:false,message:error.message}],updated_at:Timestamp.now()});await batch.commit();processed++;failed++;
   }
  }
- return {processed,scanned:queues.size};
+ return {processed,scanned:queues.size,attempted,accepted,failed,unknown};
 }

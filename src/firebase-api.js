@@ -75,7 +75,7 @@ export function createPermitAPI({config=firebaseConfig, emulator=false, name='pe
     }
     if(path==='notify'){
       const key=browserKey();if(!key)throw Error('신청한 브라우저에서 확인해 주세요.');if(!/^[A-Za-z0-9]{20}$/.test(data.queue_id||''))throw Error('이전 방식으로 접수된 신청입니다. 새 신청부터 주기적 문자 발송이 적용됩니다.');
-      const receipt=await getDoc(doc(db,'applicantCopies',key,'notificationReceipts',data.queue_id));return receipt.exists()?receipt.data():{results:[{team:'담당자',channel:'sms',status:'pending',retryable:true,message:'문자 발송 대기 중입니다. 약 5분 간격으로 확인하며 GitHub 실행 대기에 따라 더 늦어질 수 있습니다.'}]};
+      const receipt=await getDoc(doc(db,'applicantCopies',key,'notificationReceipts',data.queue_id));return receipt.exists()?receipt.data():{results:[{team:'담당자',channel:'sms',status:'pending',retryable:true,message:'문자 발송 대기 중입니다. GitHub 예약 실행이 수십 분 지연될 수 있습니다. 처리 결과는 자동 갱신됩니다.'}]};
     }
     if(path==='settings'){
       requireAdmin();const ref=doc(db,'settings','mail');
