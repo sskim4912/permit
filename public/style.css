@@ -206,3 +206,5 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
 @media(max-width:380px){.heading .gate-map{font-size:11.5px;padding:0 5px;gap:4px}.heading .gate-map svg{width:15px;height:15px}}
 
 .notification-manual{margin:12px 0}.notification-manual a{display:inline-flex;padding:10px 14px;color:#35634f;text-decoration:none;border-radius:7px}.notification-manual small{display:block;margin-top:7px;color:#6a7f72;line-height:1.6}
+
+.notification-details-list{display:grid;gap:12px}.notification-detail{padding:14px;border:1px solid #c5d8cc;border-radius:8px;background:#f4f8f6}.notification-detail strong,.notification-status{display:block}.notification-status{margin-top:8px;font-weight:600;color:#35634f}.notification-detail p{margin:8px 0;overflow-wrap:anywhere}.notification-detail small{color:#6a7f72}.record-info .notification-button{width:100%;max-width:100%;white-space:normal;margin-top:8px;padding:7px 9px;font-size:12px}

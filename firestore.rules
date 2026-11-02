@@ -7,7 +7,7 @@ service cloud.firestore {
     function text(value) { return value is string && value.size() <= 200; }
     function valid(d) {
       return d.keys().hasAll(['visit_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team','status','reviewer','version','created'])
-        && d.keys().hasOnly(['visit_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team','status','reviewer','version','created','delivery_at','visit_end_date','author_name','owner_key','modified_by','modified_at','team_id','lunch','gaisu_requested','gaisu_approved','final_approved'])
+        && d.keys().hasOnly(['visit_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team','status','reviewer','version','created','delivery_at','visit_end_date','author_name','owner_key','modified_by','modified_at','notification_queue_id','team_id','lunch','gaisu_requested','gaisu_approved','final_approved'])
         && (!('delivery_at' in d) || (d.delivery_at is timestamp && d.delivery_at <= request.time))
         && ((!('author_name' in d) && !('owner_key' in d)) || (d.author_name is string && d.author_name.size() > 0 && d.author_name.size() <= 50 && d.owner_key is string && d.owner_key.matches('^[a-f0-9]{64}$')))
         && ((!('modified_by' in d) && !('modified_at' in d)) || (d.modified_by is string && d.modified_by.size() > 0 && d.modified_by.size() <= 50 && d.modified_at is timestamp && d.modified_at <= request.time))
@@ -23,6 +23,7 @@ service cloud.firestore {
         && d.shoes in ['필요없음','230','235','240','245','250','255','260','265','270','275','280','285','290','295','300']
         && d.status in ['승인 대기','현장 제출','현장 확인','발주처 제출','승인 완료']
         && d.reviewer is string && d.reviewer.size() <= 50
+        && (!('notification_queue_id' in d) || (d.notification_queue_id is string && d.notification_queue_id.matches('^[A-Za-z0-9]{20}$')))
         && (!('team_id' in d) || (d.team_id is string && d.team_id.matches('^[a-zA-Z0-9_-]{1,60}$')))
         && (!('lunch' in d) || d.lunch in ['중식신청','미신청'])
         // New stamps are validated in keepStages; existing stamps must remain identical.
@@ -80,6 +81,7 @@ service cloud.firestore {
         && matchesPublic(request.resource.data,getAfter(/databases/$(database)/documents/publicRequests/$(id)).data);
       allow update: if (isAdmin() || ownerStage(resource.data,request.resource.data) || ownerChange(resource.data,request.resource.data)) && valid(request.resource.data)
         && keepAuthor(resource.data,request.resource.data)
+        && (!('notification_queue_id' in resource.data) || request.resource.data.notification_queue_id==resource.data.notification_queue_id)
         && keepStages(resource.data,request.resource.data)
         && (!('visit_end_date' in resource.data) || ('visit_end_date' in request.resource.data))
         && (!('delivery_at' in resource.data) || ('delivery_at' in request.resource.data))

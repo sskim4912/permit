@@ -1,3 +1,4 @@
+import {reconcileNotificationHistory} from './lib/history.js';
 import {checkSolapi} from './lib/solapi-check.js';
 import {initializeApp} from 'firebase-admin/app';
 import {getFirestore,Timestamp} from 'firebase-admin/firestore';
@@ -9,6 +10,7 @@ try{
  if(process.argv.includes('--check-solapi')){await checkSolapi(config);console.log('솔라피 인증 조회 성공. 시험 문자와 이메일은 발송하지 않았습니다.');}
  if(process.argv.includes('--check-only')){console.log('::notice title=SOLAPI connection verified::SOLAPI authentication succeeded. This check did not send any messages.');}else{
  initializeApp({projectId:'permit-daesan-461e8'});db=getFirestore();const result=await processNotificationQueue({db,Timestamp,config});console.log(`알림 처리 완료: 조회 ${result.scanned}개, 처리 ${result.processed}개. 수신자와 비밀값은 로그에 기록하지 않습니다.`);
+ if(process.argv.includes('--reconcile-history')){const history=await reconcileNotificationHistory({db,Timestamp,config});console.log(`::notice title=Notification delivery audit::${JSON.stringify(history)}`);}
  console.log(`::notice title=Notification queue result::Scanned ${result.scanned}; processed ${result.processed}; attempted ${result.attempted}; provider accepted ${result.accepted}; failed ${result.failed}; unknown ${result.unknown}.`);
  }
 }catch(error){const message=error.code===7?'Firestore 데이터 접근 권한이 필요합니다. GitHub 배포 서비스 계정에 Cloud Datastore User 역할을 추가해 주세요.':error.code?'알림 작업의 Firestore 연결을 확인해 주세요.':error.message;console.error(message);if(process.env.GITHUB_ACTIONS==='true')console.log('::error title=Notification worker failed::'+message.replace(/%/g,'%25').replace(/\r/g,'%0D').replace(/\n/g,'%0A'));process.exitCode=1;

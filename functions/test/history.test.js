@@ -1,0 +1,7 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {lookupSolapiDelivery} from '../lib/history.js';
+import {publicResults} from '../lib/notifications.js';
+const config={solapi:{apiKey:'fake-key',apiSecret:'fake-secret'}};
+test('delivery lookup is read-only and distinguishes provider success, failure and pending',async()=>{for(const [count,status] of [[{sentSuccess:1},'delivered'],[{sentFailed:1},'delivery_failed'],[{sentSuccess:0,sentPending:1},'pending']]){let call;const result=await lookupSolapiDelivery('G_TEST',config,{fetchImpl:async(url,options)=>{call={url,...options};return {ok:true,json:async()=>({count})};}});assert.equal(result.status,status);assert.equal(call.method,'GET');assert.equal(call.body,undefined);assert.equal(call.url,'https://api.solapi.com/messages/v4/groups/G_TEST');}const failed=await lookupSolapiDelivery('G_TEST',config,{fetchImpl:async()=>({ok:false,status:403})});assert.equal(failed.status,'unconfirmed');});
+test('public receipt includes delivery state but excludes recipient numbers and provider IDs',()=>{const row=publicResults([{team:'관리팀',recipient:'담당자',channel:'sms',status:'sent',to:'01000000000',providerId:'PRIVATE',delivery_status:'delivered',delivery_message:'성공',delivery_checked_at:'2026-11-02T00:00:00Z'}])[0];assert.equal(row.delivery_status,'delivered');assert.equal(row.to,undefined);assert.equal(row.providerId,undefined);});

@@ -3,7 +3,7 @@ import {publicRoster} from './public-roster.js';
 import {normalizeRecipients} from './mail-recipients.js';
 import {initializeApp} from 'firebase/app';
 import {getAuth, setPersistence, browserSessionPersistence, inMemoryPersistence, signInWithEmailAndPassword, signOut, connectAuthEmulator} from 'firebase/auth';
-import {getFirestore, collection, doc, getDocs, getDoc, setDoc, writeBatch, runTransaction, serverTimestamp, connectFirestoreEmulator} from 'firebase/firestore';
+import {getFirestore, collection, doc, getDocs, getDoc, getDocFromServer, setDoc, writeBatch, runTransaction, serverTimestamp, connectFirestoreEmulator} from 'firebase/firestore';
 
 export const firebaseConfig = {
   apiKey: 'AIzaSyAVNKvKku3o-nvV0Dc80eB9W4DOJHhdnoU',
@@ -74,8 +74,10 @@ export function createPermitAPI({config=firebaseConfig, emulator=false, name='pe
       const meta=await getDoc(metaRef);if(!meta.exists())return {teams:structuredClone(defaultTeams),version:0};const snapshot=await getDocs(collection(db,'contactTeams'));return {teams:snapshot.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.order-b.order),version:meta.data().version};
     }
     if(path==='notify'){
-      const key=browserKey();if(!key)throw Error('신청한 브라우저에서 확인해 주세요.');if(!/^[A-Za-z0-9]{20}$/.test(data.queue_id||''))throw Error('이전 방식으로 접수된 신청입니다. 새 신청부터 주기적 문자 발송이 적용됩니다.');
-      const receipt=await getDoc(doc(db,'applicantCopies',key,'notificationReceipts',data.queue_id));return receipt.exists()?receipt.data():{results:[{team:'담당자',channel:'sms',status:'pending',retryable:true,message:'문자 발송 대기 중입니다. GitHub 예약 실행이 수십 분 지연될 수 있습니다. 처리 결과는 자동 갱신됩니다.'}]};
+      const key=browserKey();let owner=key,queueId=data.queue_id;
+      if(data.request_id){const id=String(data.request_id);if(!/^[A-Za-z0-9]{20}$/.test(id))throw Error('신청 정보를 확인해 주세요.');const source=await getDocFromServer(isAdmin()?doc(db,'requests',id):copyRef(key||'invalid',id));if(!source.exists()||(!isAdmin()&&source.data().owner_key!==key))throw Error('본인 신청의 문자 결과만 확인할 수 있습니다.');owner=source.data().owner_key;queueId=source.data().notification_queue_id;if(!queueId)throw Error('이 신청의 문자 발송 기록을 연결 중이거나 자동 문자 대상이 아닙니다. 관리자에게 확인해 주세요.');}
+      if(!owner)throw Error('신청한 브라우저에서 확인해 주세요.');if(!/^[A-Za-z0-9]{20}$/.test(queueId||''))throw Error('이전 방식으로 접수된 신청입니다. 새 신청부터 주기적 문자 발송이 적용됩니다.');
+      const receipt=await getDocFromServer(doc(db,'applicantCopies',owner,'notificationReceipts',queueId));if(receipt.exists()){const result=receipt.data();return {...result,queue_id:queueId,updated_at:result.updated_at?.toDate?.().toISOString()||''};}return {queue_id:queueId,results:[{team:'담당자',channel:'sms',status:'pending',retryable:true,message:'문자 발송 대기 중입니다. GitHub 예약 실행이 수십 분 지연될 수 있습니다. 처리 결과는 자동 갱신됩니다.'}]};
     }
     if(path==='settings'){
       requireAdmin();const ref=doc(db,'settings','mail');
@@ -102,9 +104,9 @@ export function createPermitAPI({config=firebaseConfig, emulator=false, name='pe
     }
     if(path==='requests'){
       if(!Array.isArray(data.items)||data.items.length<1||data.items.length>10)throw Error('1~10명씩 제출해 주세요.');
-      const author_name=personName(data.author_name),owner_key=browserKey(true),items=data.items.map(payload),batch=writeBatch(db),ids=[];
-      for(const item of items){const ref=doc(collection(db,'requests'));ids.push(ref.id);const record={...item,author_name,owner_key,status:'승인 대기',reviewer:'',version:1,created:serverTimestamp()};batch.set(ref,record);batch.set(doc(db,'publicRequests',ref.id),summary(record));mirror(batch,ref,record);}
-      let queue_id=null;if(items.every(item=>item.team_id)){const queue=doc(collection(db,'notificationQueue'));queue_id=queue.id;batch.set(queue,{ids,owner_key,status:'pending',created:serverTimestamp()});}
+      const author_name=personName(data.author_name),owner_key=browserKey(true),items=data.items.map(payload),batch=writeBatch(db),ids=[],queue=items.every(item=>item.team_id)?doc(collection(db,'notificationQueue')):null;
+      for(const item of items){const ref=doc(collection(db,'requests'));ids.push(ref.id);const record={...item,...(queue?{notification_queue_id:queue.id}:{}),author_name,owner_key,status:'승인 대기',reviewer:'',version:1,created:serverTimestamp()};batch.set(ref,record);batch.set(doc(db,'publicRequests',ref.id),summary(record));mirror(batch,ref,record);}
+      let queue_id=null;if(queue){queue_id=queue.id;batch.set(queue,{ids,owner_key,status:'pending',created:serverTimestamp()});}
       await batch.commit();return {count:items.length,ids,queue_id};
     }
     if(path==='owner-update'){

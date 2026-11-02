@@ -14,7 +14,7 @@ export function buildPlan(records,teams){
   for(const channel of ['sms','email']){const targets=new Set();for(const contact of team.contacts){const to=channel==='sms'?contact.phone.replace(/\D/g,''):contact.email.toLowerCase();if(targets.has(to))continue;targets.add(to);tasks.push({id:hash(team.id+':'+channel+':'+to).slice(0,24),team:team.name,channel,to,recipient:contact.name,subject,text,html,status:'pending'});}}
  }return tasks;
 }
-export function publicResults(tasks){return tasks.map(({team,channel,recipient,status,message,retryable})=>({team,channel,recipient:recipient||'',status,message:message||'',retryable:!!retryable}));}
+export function publicResults(tasks){return tasks.map(({team,channel,recipient,status,message,retryable,delivery_status,delivery_message,delivery_checked_at})=>({team,channel,recipient:recipient||'',status,message:message||'',retryable:!!retryable,...(delivery_status?{delivery_status,delivery_message:delivery_message||'',delivery_checked_at:delivery_checked_at||''}:{})}));}
 export class DeliveryError extends Error{constructor(message,{uncertain=false,retryable=true}={}){super(message);this.uncertain=uncertain;this.retryable=retryable;}}
 export async function sendTask(task,config,{fetchImpl=fetch,deliveryKey}={}){
  let url,headers,body;

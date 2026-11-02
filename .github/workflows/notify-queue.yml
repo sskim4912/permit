@@ -34,12 +34,12 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           project_id: permit-daesan-461e8
-      - name: Verify provider connection and send only queued new submissions
+      - name: Process queue and reconcile request delivery history
         env:
           PERMIT_NOTIFICATION_CONFIG: ${{ secrets.PERMIT_NOTIFICATION_CONFIG }}
         run: |
           if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            node functions/worker.js --check-solapi
+            node functions/worker.js --check-solapi --reconcile-history
           else
-            node functions/worker.js
+            node functions/worker.js --reconcile-history
           fi
