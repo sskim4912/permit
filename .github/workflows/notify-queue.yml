@@ -1,3 +1,4 @@
+# Check and process current pending submissions after a reported delivery delay.
 # Retry queued submissions after the project owner granted Firestore data-write access.
 name: Send queued permit notifications
 on:
