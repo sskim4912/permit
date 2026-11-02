@@ -1,3 +1,4 @@
+# Refresh per-request delivery receipts after deploying the result lookup fix.
 name: Send queued permit notifications
 on:
   schedule:
