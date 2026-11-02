@@ -1,3 +1,4 @@
+# Retry queued submissions after the project owner granted Firestore data-write access.
 name: Send queued permit notifications
 on:
   schedule:
