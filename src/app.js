@@ -187,7 +187,7 @@ $('downloadExcel').onclick=()=>downloadWorkbook();
 $('downloadDetailedExcel').onclick=()=>downloadWorkbook(true);
 for(const [id,delta] of [['weekPrev',-1],['weekNext',1]])$(id).onclick=()=>{weekOffset+=delta;allWeeks=false;$('dateFilter').value='';selected.clear();render();};
 $('weekCurrent').onclick=()=>{weekOffset=0;allWeeks=false;$('dateFilter').value='';selected.clear();render();};
-$('weekAll').onclick=()=>{allWeeks=true;$('dateFilter').value='';selected.clear();render();};
+$('weekAll').onclick=async()=>{const button=$('weekAll');if(button.disabled)return;allWeeks=true;for(const id of ['statusFilter','dateFilter','search'])$(id).value='';selected.clear();render();button.disabled=true;try{await refresh();}finally{button.disabled=false;}};
 $('siteMapToggle').onclick=()=>{
  const panel=$('siteMapPanel'),image=$('siteMapImage'),open=panel.hidden;
  panel.hidden=!open;$('siteMapToggle').setAttribute('aria-expanded',String(open));
