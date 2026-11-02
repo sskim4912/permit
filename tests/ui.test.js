@@ -15,7 +15,8 @@ async function setup({draft=null,blocked=false,own=false}={}){
  w.eval(readFileSync('src/notification-ui.js','utf8').replace('export function createNotificationUI','function createNotificationUI'));
  w.structuredClone=structuredClone;w.defaultTeams=defaultTeams;w.teamLabel=teamLabel;w.validateTeams=validateTeams;w.eval(readFileSync('src/directory-ui.js','utf8').replace(/import .*?;\n/,'').replace('export function createDirectoryUI','function createDirectoryUI').replace('export {defaultTeams,teamLabel};',''));
  const NativeDate=w.Date;w.Date=class extends NativeDate{constructor(...args){super(...(args.length?args:['2026-10-15T03:00:00Z']));}};
- w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};w.confirm=()=>true;w.setInterval=()=>0;
+ let notificationClock=Date.now();const intervals=[];w.Date.now=()=>notificationClock;
+ w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};w.confirm=()=>true;w.setInterval=(fn,ms)=>{intervals.push({fn,ms});return 0;};
  const realTimer=w.setTimeout.bind(w);w.setTimeout=(fn,ms)=>ms===350?realTimer(fn,0):0;w.Blob=Blob;
  if(draft)w.sessionStorage.setItem('permit-draft',JSON.stringify(draft));if(blocked)Object.defineProperty(w,'sessionStorage',{get(){throw Error('blocked');}});
  let signed=false,recipient='test@example.com',blob,directoryVersion=0,directoryRecords=structuredClone(defaultTeams),notifyHook=null,requestNotificationResults={},notifyResult={results:[{team:'관리팀',channel:'sms',status:'sent'},{team:'관리팀',channel:'email',status:'sent'}]};const calls=[],notifications=[];
@@ -52,7 +53,7 @@ async function setup({draft=null,blocked=false,own=false}={}){
  const login=async()=>{await d.querySelector('#login').onclick();d.querySelector('#password').value='test-password';await d.querySelector('#loginForm').onsubmit({preventDefault(){}});await tick();};
  const change=(id,value)=>{d.querySelector('#'+id).value=value;d.querySelector('#'+id).dispatchEvent(new w.Event('change',{bubbles:true}));};
  const submit=()=>d.querySelector('#requestForm').onsubmit({preventDefault(){}});
- return {dom,w,d,calls,enter,login,change,submit,getBlob:()=>blob,records:()=>records,notifications,setNotifyResult:value=>{notifyResult=value;},setRequestNotifyResult:(id,value)=>{requestNotificationResults[id]=value;},setNotifyHook:value=>{notifyHook=value;}};
+ return {dom,w,d,calls,enter,login,change,submit,advanceNotificationClock:ms=>{notificationClock+=ms;},runNotificationPoll:async()=>{intervals.find(i=>i.ms===5000)?.fn();await tick();},getBlob:()=>blob,records:()=>records,notifications,setNotifyResult:value=>{notifyResult=value;},setRequestNotifyResult:(id,value)=>{requestNotificationResults[id]=value;},setNotifyHook:value=>{notifyHook=value;}};
 }
 test('one screen and two statuses; public names are visible while original birth and privileged controls are hidden',async()=>{
  const {dom,d}=await setup();try{assert.equal(d.querySelector('#requestPanel').hidden,false);assert.equal(d.querySelector('#adminControls').hidden,true);assert.equal(d.querySelector('#adminSettings').hidden,true);assert.equal(d.querySelectorAll('[data-select]').length,0);assert.equal(d.querySelectorAll('[data-edit]').length,0);assert.ok(d.querySelector('#list').textContent.includes('가상방문자'));assert.ok(!d.querySelector('#list').textContent.includes('1990-01-23'));assert.deepEqual([...d.querySelector('#statusFilter').options].map(option=>option.textContent),['전체','승인 대기','승인 완료']);assert.ok(!d.querySelector('#list').textContent.includes('현장 제출'));}finally{dom.window.close();}
@@ -374,4 +375,14 @@ for(const administrator of [false,true])test(`all-period reloads every saved app
   await d.querySelector('#weekAll').onclick();assert.equal(d.querySelector('#statusFilter').value,'');assert.equal(d.querySelector('#dateFilter').value,'');assert.equal(d.querySelector('#search').value,'');assert.equal(d.querySelectorAll('[data-record]').length,4);assert.ok(d.querySelector('[data-record=nov4]'));assert.ok(d.querySelector('[data-record=older]'));assert.ok(d.querySelector('[data-record=new-arrival]'));assert.equal(d.querySelector('#selectedCount').textContent,'0명 선택 · 최대 '+(administrator?10:5)+'명');assert.equal(d.querySelector('#weekLabel').textContent,'기간 제한 없음');assert.equal(d.querySelector('[data-record=nov4]').textContent.includes(base.birth),administrator);
   change('statusFilter','승인 완료');assert.equal(d.querySelectorAll('[data-record]').length,2);
  }finally{dom.window.close();}
+});
+
+
+test('new pending submissions refresh at five seconds then stop automatic reads on completion',async()=>{
+ const {dom,enter,submit,notifications,setNotifyResult,advanceNotificationClock,runNotificationPoll}=await setup();try{setNotifyResult({results:[{team:'관리팀',channel:'sms',status:'pending',retryable:true,message:'발송 대기'}]});enter('purpose','회의');enter('team','관리팀');enter('name','가상방문자');enter('birth','19900101');enter('phone','01000000000');await submit();assert.equal(notifications.length,1);advanceNotificationClock(4000);await runNotificationPoll();assert.equal(notifications.length,1);advanceNotificationClock(1000);await runNotificationPoll();assert.equal(notifications.length,2);setNotifyResult({results:[{team:'관리팀',channel:'sms',status:'sent'}]});advanceNotificationClock(5000);await runNotificationPoll();assert.equal(notifications.length,3);advanceNotificationClock(5000);await runNotificationPoll();assert.equal(notifications.length,3);}finally{dom.window.close();}
+});
+
+
+test('manual dispatch shortcut is admin-only and explicitly preserves automatic delivery',async()=>{
+ const {dom,d,login}=await setup({own:true});try{assert.equal(d.querySelector('#manualNotificationActions').hidden,true);await login();assert.equal(d.querySelector('#manualNotificationActions').hidden,false);assert.match(d.querySelector('#manualNotificationActions').textContent,/자동 발송은 유지/);assert.match(d.querySelector('#manualNotificationActions').textContent,/Run workflow/);assert.match(d.querySelector('#manualNotificationActions a').href,/notify-queue.yml$/);await d.querySelector('#login').onclick();assert.equal(d.querySelector('#manualNotificationActions').hidden,true);}finally{dom.window.close();}
 });
