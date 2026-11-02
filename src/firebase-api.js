@@ -1,3 +1,4 @@
+import {requestFastNotification} from './notification-trigger.js';
 import {defaultTeams,validateTeams} from '../functions/lib/directory.js';
 import {publicRoster} from './public-roster.js';
 import {normalizeRecipients} from './mail-recipients.js';
@@ -77,7 +78,7 @@ export function createPermitAPI({config=firebaseConfig, emulator=false, name='pe
       const key=browserKey();let owner=key,queueId=data.queue_id;
       if(data.request_id){const id=String(data.request_id);if(!/^[A-Za-z0-9]{20}$/.test(id))throw Error('신청 정보를 확인해 주세요.');const source=await getDocFromServer(isAdmin()?doc(db,'requests',id):copyRef(key||'invalid',id));if(!source.exists()||(!isAdmin()&&source.data().owner_key!==key))throw Error('본인 신청의 문자 결과만 확인할 수 있습니다.');owner=source.data().owner_key;queueId=source.data().notification_queue_id;if(!queueId)throw Error('이 신청의 문자 발송 기록을 연결 중이거나 자동 문자 대상이 아닙니다. 관리자에게 확인해 주세요.');}
       if(!owner)throw Error('신청한 브라우저에서 확인해 주세요.');if(!/^[A-Za-z0-9]{20}$/.test(queueId||''))throw Error('이전 방식으로 접수된 신청입니다. 새 신청부터 주기적 문자 발송이 적용됩니다.');
-      const receipt=await getDocFromServer(doc(db,'applicantCopies',owner,'notificationReceipts',queueId));if(receipt.exists()){const result=receipt.data();return {...result,queue_id:queueId,updated_at:result.updated_at?.toDate?.().toISOString()||''};}return {queue_id:queueId,results:[{team:'담당자',channel:'sms',status:'pending',retryable:true,message:'문자 발송 대기 중입니다. GitHub 예약 실행이 수십 분 지연될 수 있습니다. 처리 결과는 자동 갱신됩니다.'}]};
+      const receipt=await getDocFromServer(doc(db,'applicantCopies',owner,'notificationReceipts',queueId));if(receipt.exists()){const result=receipt.data();return {...result,queue_id:queueId,updated_at:result.updated_at?.toDate?.().toISOString()||''};}return {queue_id:queueId,results:[{team:'담당자',channel:'sms',status:'pending',retryable:true,message:'문자 자동 발송 대기 중입니다. 발송 작업이 시작되면 처리 결과가 자동 갱신됩니다.'}]};
     }
     if(path==='settings'){
       requireAdmin();const ref=doc(db,'settings','mail');
@@ -107,7 +108,7 @@ export function createPermitAPI({config=firebaseConfig, emulator=false, name='pe
       const author_name=personName(data.author_name),owner_key=browserKey(true),items=data.items.map(payload),batch=writeBatch(db),ids=[],queue=items.every(item=>item.team_id)?doc(collection(db,'notificationQueue')):null;
       for(const item of items){const ref=doc(collection(db,'requests'));ids.push(ref.id);const record={...item,...(queue?{notification_queue_id:queue.id}:{}),author_name,owner_key,status:'승인 대기',reviewer:'',version:1,created:serverTimestamp()};batch.set(ref,record);batch.set(doc(db,'publicRequests',ref.id),summary(record));mirror(batch,ref,record);}
       let queue_id=null;if(queue){queue_id=queue.id;batch.set(queue,{ids,owner_key,status:'pending',created:serverTimestamp()});}
-      await batch.commit();return {count:items.length,ids,queue_id};
+      await batch.commit();if(queue_id&&!emulator)void requestFastNotification({queue_id,request_id:ids[0],owner_key});return {count:items.length,ids,queue_id};
     }
     if(path==='owner-update'){
       const key=browserKey();if(!key)throw Error('신청한 브라우저에서만 수정할 수 있습니다.');

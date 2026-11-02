@@ -58,6 +58,8 @@ jobs:
           exit "$test_status"
         env:
           FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true'
+      - name: Verify deployed Apps Script bridge without sending messages
+        run: node scripts/verify-notification-trigger.mjs
       - name: Stamp deployment commit
         run: node -e "require('fs').writeFileSync('public/deployment.json', JSON.stringify({commit:process.env.GITHUB_SHA}))"
       - uses: actions/upload-artifact@v6
