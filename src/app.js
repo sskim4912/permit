@@ -190,6 +190,14 @@ $('downloadDetailedExcel').onclick=()=>downloadWorkbook(true);
 for(const [id,delta] of [['weekPrev',-1],['weekNext',1]])$(id).onclick=()=>{weekOffset+=delta;allWeeks=false;$('dateFilter').value='';selected.clear();render();};
 $('weekCurrent').onclick=()=>{weekOffset=0;allWeeks=false;$('dateFilter').value='';selected.clear();render();};
 $('weekAll').onclick=async()=>{const button=$('weekAll');if(button.disabled)return;allWeeks=true;for(const id of ['statusFilter','dateFilter','search'])$(id).value='';selected.clear();render();button.disabled=true;try{await refresh();}finally{button.disabled=false;}};
+document.querySelectorAll('[data-copy-address]').forEach(button=>{
+ button.onclick=async()=>{
+  button.disabled=true;
+  try{await navigator.clipboard.writeText(button.dataset.copyAddress);toast(button.dataset.copyAddress+' · 복사 완료');}
+  catch(e){toast('주소 복사를 허용해 주세요. 표시된 검색명을 길게 누르거나 선택해서 복사할 수도 있습니다.');}
+  finally{button.disabled=false;}
+ };
+});
 $('siteMapToggle').onclick=()=>{
  const panel=$('siteMapPanel'),image=$('siteMapImage'),open=panel.hidden;
  panel.hidden=!open;$('siteMapToggle').setAttribute('aria-expanded',String(open));
