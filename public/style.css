@@ -259,7 +259,7 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
  .table-wrap .roster-table .record-info .row-actions button{font-size:13px;min-height:44px}
  .table-wrap .roster-table .record-info .action-help{font-size:11px}
  /* These fields remain available when the existing detail disclosure is opened. */
- .table-wrap .roster-table tr[data-record]:has(.record-info:not([open]))>td:is([data-label="생년월일"],[data-label="차종"],[data-label="운전자 해당여부"],[data-label="방문목적"]){display:none}
+ .table-wrap .roster-table tr[data-record]:has(.record-info:not([open]))>td:is([data-label="생년월일"],[data-label="운전자 해당여부"],[data-label="방문목적"]){display:none}
  .table-wrap .roster-table tr[data-record]>td[data-label="식사신청(중식) 여부"]{order:4}
  .table-wrap .roster-table td[data-label="식사신청(중식) 여부"]::before{content:'중식 신청'}
  .table-wrap .roster-table tr[data-record]>td.approval-cell{grid-column:span 2;order:5;align-self:stretch;padding:8px 5px;border:1px solid #e0ebe4;border-radius:8px;background:#f3f7f4;text-align:center}
