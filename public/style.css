@@ -208,3 +208,91 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
 .notification-manual{margin:12px 0}.notification-manual a{display:inline-flex;padding:10px 14px;color:#35634f;text-decoration:none;border-radius:7px}.notification-manual small{display:block;margin-top:7px;color:#6a7f72;line-height:1.6}
 
 .notification-details-list{display:grid;gap:12px}.notification-detail{padding:14px;border:1px solid #c5d8cc;border-radius:8px;background:#f4f8f6}.notification-detail strong,.notification-status{display:block}.notification-status{margin-top:8px;font-weight:600;color:#35634f}.notification-detail p{margin:8px 0;overflow-wrap:anywhere}.notification-detail small{color:#6a7f72}.record-info .notification-button{width:100%;max-width:100%;white-space:normal;margin-top:8px;padding:7px 9px;font-size:12px}
+
+/* Phone layout: compact roster cards with progressive details and one approval row. */
+@media(max-width:720px){
+ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+ :root{font-size:14px}
+ main{padding:16px 12px 20px}
+ .site-header{height:68px}.brand img{width:118px;height:50px}
+ .site-header .admin-access{font-size:12px;min-height:42px;padding:9px 11px}
+ .heading{gap:12px;margin:0 0 16px}.heading h1{font-size:22px;letter-spacing:-.6px}
+ .heading .gate-maps{gap:8px}.heading .gate-map{height:44px;min-height:44px;font-size:12px;padding:0 7px}
+ .panel{padding:14px;border-radius:12px;margin-bottom:14px}
+ .section-title{margin-bottom:14px}h2,.section-title h2{font-size:17px}
+ .author-line{margin:14px 0}.author-line p{margin:8px 0;font-size:11px;line-height:1.6}
+ .person{padding:12px;margin-bottom:12px;border-radius:10px}
+ .person-fields,.list-panel .inline-editor .person-fields{gap:12px 10px}
+ .person input,.person select{height:44px;min-height:44px;font-size:16px;padding:9px 8px}
+ .person label{font-size:11px}.meal-hint{font-size:10px}
+ .form-actions{gap:8px}.form-actions button{min-width:0!important}
+ .list-title{gap:12px;margin-bottom:12px}.list-title h2 span{font-size:14px}
+ .week-navigation{padding:10px;gap:10px;margin:14px 0}
+ .week-navigation .week-buttons button{font-size:12px;min-height:42px;padding:8px 2px}
+ .week-range{gap:6px;padding-top:8px}.week-range>span{font-size:10px}.week-navigation .week-range strong{font-size:12px}
+ .list-panel>.muted,.list-panel .owner-help,.list-panel .list-note{font-size:11px;line-height:1.65}
+ .owner-help{padding:10px 12px;margin-bottom:12px}
+ .mobile-sort{flex-wrap:nowrap;overflow-x:auto;max-width:100%;gap:6px;padding-bottom:5px;margin:12px 0;scrollbar-width:thin}
+ .mobile-sort>span,.mobile-sort button{flex:none}
+ .mobile-sort>span{font-size:11px}.mobile-sort button{font-size:12px;min-height:42px;padding:8px 10px;white-space:nowrap}
+ .table-wrap .roster-table{display:block;width:100%;border:0}
+ .table-wrap .roster-table tbody{display:block;width:100%}
+ .table-wrap .roster-table tr[data-record]{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px 12px;padding:12px;margin-bottom:12px;border:1px solid #d8e4dc;border-radius:12px;background:white;align-items:start;box-shadow:0 2px 6px #1b493106}
+ .table-wrap .roster-table tr[data-record].selected{background:#f0f8f3;border-color:#88bda1}
+ .table-wrap .roster-table tr[data-record]>td{grid-column:span 3;padding:0;min-width:0;text-align:left;font-size:13px;line-height:1.5;align-self:start;order:3}
+ .table-wrap .roster-table tr[data-record]>td::before{text-align:left;color:#71867b;font-size:11px;margin-bottom:3px;font-weight:400}
+ .table-wrap .roster-table tr[data-record]>.number-cell{grid-column:1/3;order:0;color:#647c6e;font-size:12px}
+ .table-wrap .roster-table .number-cell::before{display:none}
+ .table-wrap .roster-table .number-choice{min-height:28px;gap:8px}
+ .table-wrap .roster-table .number-choice>span::before{content:'#';color:#91a397;margin-right:2px}
+ .table-wrap .roster-table .number-choice input{width:22px;height:22px;margin:0}
+ .table-wrap .roster-table tr[data-record]>td[data-label="출입날짜"]{grid-column:3/-1;order:1;text-align:right;font-size:12px;color:#456555;padding-top:4px}
+ .table-wrap .roster-table td[data-label="출입날짜"]::before{display:none}
+ .table-wrap .roster-table tr[data-record]>td[data-label="이름"]{grid-column:1/-1;order:2;padding-bottom:10px;border-bottom:1px solid #e8eeea}
+ .table-wrap .roster-table td[data-label="이름"]::before{display:none}
+ .visitor-name{font-size:18px;font-weight:700;letter-spacing:-.3px}
+ .table-wrap .roster-table .record-info{display:inline-block;margin:0 0 0 12px;vertical-align:middle;font-weight:400}
+ .table-wrap .roster-table .record-info summary{font-size:12px;text-align:left;min-height:32px;line-height:32px;list-style-position:inside}
+ .table-wrap .roster-table .record-info[open]{display:block;margin:8px 0 0;padding:8px 10px;background:#f5f8f6;border-radius:8px}
+ .table-wrap .roster-table .record-info>div{text-align:left;font-size:12px;line-height:1.7}
+ .table-wrap .roster-table .record-info .row-actions{max-width:none;margin:10px 0 0}
+ .table-wrap .roster-table .record-info .row-actions button{font-size:13px;min-height:44px}
+ .table-wrap .roster-table .record-info .action-help{font-size:11px}
+ /* These fields remain available when the existing detail disclosure is opened. */
+ .table-wrap .roster-table tr[data-record]:has(.record-info:not([open]))>td:is([data-label="생년월일"],[data-label="차종"],[data-label="운전자 해당여부"],[data-label="방문목적"]){display:none}
+ .table-wrap .roster-table tr[data-record]>td[data-label="식사신청(중식) 여부"]{order:4}
+ .table-wrap .roster-table td[data-label="식사신청(중식) 여부"]::before{content:'중식 신청'}
+ .table-wrap .roster-table tr[data-record]>td.approval-cell{grid-column:span 2;order:5;align-self:stretch;padding:8px 5px;border:1px solid #e0ebe4;border-radius:8px;background:#f3f7f4;text-align:center}
+ .table-wrap .roster-table td.approval-cell::before{text-align:center;font-size:10px;margin-bottom:2px;white-space:nowrap}
+ .table-wrap .roster-table .approval-record{min-height:40px;justify-content:center;gap:5px;flex-wrap:wrap;margin:0;cursor:pointer}
+ .table-wrap .roster-table .approval-record input{width:18px;height:18px}
+ .table-wrap .roster-table .approval-record>span{max-width:100%;gap:2px}
+ .table-wrap .roster-table .approval-record small{font-size:11px}
+ .table-wrap .roster-table .approval-record strong{font-size:11px}
+ .table-wrap .roster-table .approval-record time{font-size:10px;line-height:1.4}
+ .table-wrap .roster-table .empty{grid-column:1/-1}
+ .table-wrap .roster-table tr.inline-editor-row>td{padding-bottom:12px}
+ .inline-editor{padding:12px;border-radius:10px}.inline-editor .person{padding:10px}
+ .admin-name{margin:12px 0}.notification-manual{margin:10px 0}
+ .notification-manual small{font-size:11px;line-height:1.6}
+ .bulk-toolbar{position:static;border:0;border-radius:8px;padding:10px;margin-bottom:12px;box-shadow:none}
+ .bulk-toolbar>div{margin-top:8px}
+ body:not(.has-selection) .bulk-toolbar>div{display:none}
+ body.admin-mode main{padding-bottom:20px}
+ body.has-selection .bulk-toolbar{position:fixed;bottom:0;left:0;right:0;border-top:1px solid #bdd9c8;border-radius:0;margin:0;padding:10px 12px max(12px,env(safe-area-inset-bottom));box-shadow:0 -3px 14px #214b3122}
+ body.has-selection main{padding-bottom:140px}
+ .notification-result{font-size:12px;padding:11px;line-height:1.7;overflow-wrap:anywhere}
+ dialog{padding:16px;width:calc(100vw - 24px);max-height:calc(100dvh - 32px)}
+ dialog .section-title h2{font-size:18px}
+ #contactsDialog{width:calc(100vw - 24px)}
+ .contacts-table-wrap{max-height:65dvh}.contacts-table tr{gap:10px;padding:12px;margin-bottom:10px}
+ .contacts-table td,.contacts-table a{font-size:12px}
+ .notification-detail{padding:12px;font-size:13px}
+ footer{padding:12px 0;font-size:10px}
+}
+@media(max-width:360px){
+ main{padding-left:8px;padding-right:8px}.panel{padding:10px}
+ .heading h1{font-size:21px}.heading .gate-map{font-size:11px;gap:4px}
+ .heading .gate-map .external-arrow{display:none}
+ .table-wrap .roster-table tr[data-record]{padding:10px;gap:10px 8px}
+}

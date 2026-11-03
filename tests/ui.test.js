@@ -386,3 +386,16 @@ test('new pending submissions refresh at five seconds then stop automatic reads 
 test('manual dispatch shortcut is admin-only and explicitly preserves automatic delivery',async()=>{
  const {dom,d,login}=await setup({own:true});try{assert.equal(d.querySelector('#manualNotificationActions').hidden,true);await login();assert.equal(d.querySelector('#manualNotificationActions').hidden,false);assert.match(d.querySelector('#manualNotificationActions').textContent,/자동 발송은 유지/);assert.match(d.querySelector('#manualNotificationActions').textContent,/Run workflow/);assert.match(d.querySelector('#manualNotificationActions a').href,/notify-queue.yml$/);await d.querySelector('#login').onclick();assert.equal(d.querySelector('#manualNotificationActions').hidden,true);}finally{dom.window.close();}
 });
+
+test('expanded visitor details survive refresh and the mobile action bar follows actual selection',async()=>{
+ const {dom,d}=await setup({own:true});try{
+  const detail=d.querySelector('[data-record=one] .record-info');detail.open=true;
+  await d.querySelector('#refresh').onclick();
+  assert.equal(d.querySelector('[data-record=one] .record-info').open,true);
+  assert.equal(d.body.classList.contains('has-selection'),false);
+  const checkbox=d.querySelector('[data-select=one]');checkbox.checked=true;checkbox.dispatchEvent(new dom.window.Event('change',{bubbles:true}));
+  assert.equal(d.body.classList.contains('has-selection'),true);
+  checkbox.checked=false;checkbox.dispatchEvent(new dom.window.Event('change',{bubbles:true}));
+  assert.equal(d.body.classList.contains('has-selection'),false);
+ }finally{dom.window.close();}
+});
