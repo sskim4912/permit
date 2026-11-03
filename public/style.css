@@ -299,3 +299,11 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
  .heading .gate-map .external-arrow{display:none}
  .table-wrap .roster-table tr[data-record]{padding:10px;gap:10px 8px}
 }
+
+/* Keep navigation search names directly below their matching gate links. */
+.heading .gate-maps{align-items:start}
+.gate-destination{min-width:0}
+.gate-destination .gate-map{width:100%}
+.gate-navigation-name{margin:7px 0 0;text-align:center;font-size:12px;line-height:1.6;color:#526b5e;word-break:keep-all}
+.gate-navigation-name span{display:block}
+@media(max-width:720px){.gate-navigation-name{font-size:11px;margin-top:6px;line-height:1.6}}
