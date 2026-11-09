@@ -65,3 +65,11 @@ GitHub Actions가 `permit-firebase-setup` 또는 `main` push에서 빌드·화�
 현장 위치도 왼쪽의 ‘출입신청 담당자 보기’에서 팀별 담당자 두 명을 확인합니다. 관리자만 표의 이름·전화번호·이메일 및 팀 목록을 저장할 수 있습니다. 요청팀 선택은 저장된 디렉터리와 연결하며 ‘팀명 이름, 이름’만 표시합니다.
 
 신규 신청의 문자 알림은 GitHub Actions가 약 5분 간격(실행 지연 가능)으로 Firestore 대기 항목을 확인해 솔라피 문자(LMS)로 전송합니다. Google Cloud 결제 서버는 사용하지 않으며, 솔라피 요금만 별도입니다. 신청 저장·문자 대기·발송 접수를 구분합니다. 설정·배포·재시도 기준은 [NOTIFICATIONS.md](NOTIFICATIONS.md)를 참고하세요. 외부 발송 없이 `npm test --prefix functions`로 서버 로직을 검사할 수 있습니다.
+
+## 씨텍 출입예약 원본 양식 다운로드
+
+관리 설정의 ‘씨텍 출입예약 양식 다운로드’는 현재 조회 기간·상태·검색·정렬 조건에 맞는 관리자 원본 자료를 `씨텍_출입예약_양식.xls`로 저장합니다. 원본 13열(빈 H/J열 포함), 제목·필수 항목 색상·테두리를 유지하고 예시 행은 제외합니다. 성명은 방문자 이름, 생년월일은 YYMMDD 문자, 차종란은 차명, 휴대폰은 휴대전화에 대응합니다. 회사명·부서명·주소·일반전화·메일은 빈칸이며 요청팀을 방문자 소속으로 추정하지 않습니다. 수식처럼 보이는 입력도 문자열로 기록합니다.
+
+브라우저에서 원본 BIFF8 서식과 CFB 컨테이너로 실제 XLS를 생성하므로 서버나 추가 유료 서비스가 필요하지 않습니다. A4 가로, 인쇄 영역 A1:M(마지막 행), 가로/세로 한 페이지를 지정하며 인원이 많으면 글씨가 작아집니다. XLS 한계인 데이터 65,535행을 초과하면 오류를 표시하고 자르지 않습니다. 기존 XLSX 다운로드는 그대로 유지합니다.
+
+원본은 `public/templates/seetec-entry-original.xls`, 추출 서식은 `src/seetec-template.json`입니다. 양식 변경 시 `python3 scripts/extract-seetec-template.py`로 재추출합니다. XLS 검증에는 독립 판독기 xlrd 2.0.2를 사용합니다: `python3 -m pip install --target /tmp/permit-xls-tools xlrd==2.0.2` 후 `PYTHONPATH=/tmp/permit-xls-tools npm run test:ui`. CI에도 동일 검증이 포함됩니다.

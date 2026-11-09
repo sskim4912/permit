@@ -7,6 +7,7 @@ import {composeMailto} from '../src/mail-recipients.js';
 import {buildMailDocument,buildDraftEmail} from '../src/mail-document.js';
 import {publicRoster} from '../src/public-roster.js';
 import ExcelJS from 'exceljs';
+import {createSeetecWorkbook} from '../src/seetec-export.js';
 import {createApplicantWorkbook,createDetailedWorkbook} from '../src/xlsx-export.js';
 const tick=()=>new Promise(resolve=>setTimeout(resolve,5));
 const base={visit_date:'2026-10-15',purpose:'회의',team:'공무팀',gate:'서문',name:'가상방문자',birth:'1990-01-23',phone:'010-0000-0000',plate:'=formula',vehicle_type:'승용',vehicle_name:'캐스퍼',role:'운전자',shoes:'280',lunch:'미신청',reviewer:'',version:1,created:'2026-10-15T00:00:00Z'};
@@ -23,7 +24,7 @@ async function setup({draft=null,blocked=false,own=false}={}){
  let records=[{...base,id:'one',status:'현장 제출',own,author_name:'최초 작성자'},{...base,id:'two',name:'예시방문자',status:'발주처 제출'},{...base,id:'three',name:'테스트방문자',status:'승인 완료'}];
  w.URL.createObjectURL=value=>{blob=value;return 'blob:test';};w.URL.revokeObjectURL=()=>{};w.HTMLAnchorElement.prototype.click=function(){};
  w.composeMailto=composeMailto;w.buildMailDocument=buildMailDocument;w.buildDraftEmail=buildDraftEmail;
- w.loadApplicantExcel=()=>Promise.resolve({createApplicantWorkbook,createDetailedWorkbook});
+ w.loadApplicantExcel=()=>Promise.resolve({createApplicantWorkbook,createDetailedWorkbook,createSeetecWorkbook});
  w.createPermitAPI=()=>({api:async(path,data)=>{
   if(path==='directory'){if(data&&!signed)throw Error('관리자만 수정');if(data){directoryRecords=structuredClone(data.teams);directoryVersion++;calls.push({path,data});}return {teams:structuredClone(directoryRecords),version:directoryVersion};}
   if(path==='notify'){notifications.push(data);if(notifyHook)return await notifyHook(data);return structuredClone(requestNotificationResults[data.request_id]||notifyResult);}
@@ -397,5 +398,18 @@ test('expanded visitor details survive refresh and the mobile action bar follows
   assert.equal(d.body.classList.contains('has-selection'),true);
   checkbox.checked=false;checkbox.dispatchEvent(new dom.window.Event('change',{bubbles:true}));
   assert.equal(d.body.classList.contains('has-selection'),false);
+ }finally{dom.window.close();}
+});
+
+test('Seetec original XLS download is admin-only, uses current filters and produces an XLS blob',async()=>{
+ const {dom,d,login,change,getBlob}=await setup({own:true});try{
+  assert.equal(d.querySelector('#adminSettings').hidden,true);
+  await d.querySelector('#downloadSeetecExcel').onclick();assert.equal(getBlob(),undefined);
+  await login();change('search','가상방문자');
+  await d.querySelector('#downloadSeetecExcel').onclick();const blob=getBlob();assert.equal(blob.type,'application/vnd.ms-excel');
+  const data=new Uint8Array(await blob.arrayBuffer());assert.deepEqual([...data.slice(0,8)],[0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1]);
+  const file=Buffer.from(data);assert.ok(file.includes(Buffer.from('가상방문자','utf16le')));assert.ok(!file.includes(Buffer.from('예시방문자','utf16le')));assert.ok(!file.includes(Buffer.from('테스트방문자','utf16le')));
+  assert.equal(d.querySelector('#downloadSeetecExcel').disabled,false);
+  await d.querySelector('#login').onclick();assert.equal(d.querySelector('#adminSettings').hidden,true);
  }finally{dom.window.close();}
 });

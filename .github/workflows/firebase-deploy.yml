@@ -31,7 +31,11 @@ jobs:
       - run: npm run build
       - run: npm ci --prefix functions
       - run: npm test --prefix functions
+      - name: Install independent XLS reader for template verification
+        run: python3 -m pip install --target /tmp/permit-xls-tools xlrd==2.0.2
       - run: npm run test:ui
+        env:
+          PYTHONPATH: /tmp/permit-xls-tools
       - run: node --test tests/hosting.test.js
       - name: Test Firebase authentication and Firestore rules locally
         shell: bash
