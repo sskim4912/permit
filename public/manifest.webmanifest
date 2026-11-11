@@ -1,0 +1,16 @@
+{
+  "id": "/",
+  "name": "출입신청",
+  "short_name": "출입신청",
+  "description": "GS건설 대산 현장 출입신청",
+  "lang": "ko-KR",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#117b61",
+  "icons": [
+    {"src": "/icons/app-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/icons/app-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}
