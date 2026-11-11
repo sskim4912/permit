@@ -271,5 +271,8 @@ test('company persists privately per visitor, rejects missing values and can be 
   assert.equal((await db.doc('applicantCopies/'+key+'/items/'+legacyId).get()).data().company,'수정회사');
   const publicDb=env.unauthenticatedContext().firestore(),bad={...withoutCompany,status:'승인 대기',reviewer:'',version:1,created:serverTimestamp()},batch=writeBatch(publicDb);
   batch.set(doc(publicDb,'requests','company-missing-denied'),bad);batch.set(doc(publicDb,'publicRequests','company-missing-denied'),pub(bad));await assertFails(batch.commit());
+  const stored=(await getDoc(doc(publicDb,'applicantCopies',key,'items',legacyId))).data(),{company:storedCompany,...stripped}=stored;
+  const removed={...stripped,version:stored.version+1,modified_by:'회사검증자',modified_at:serverTimestamp()},removal=writeBatch(publicDb);
+  removal.set(doc(publicDb,'requests',legacyId),removed);removal.set(doc(publicDb,'publicRequests',legacyId),pub(removed));removal.set(doc(publicDb,'applicantCopies',key,'items',legacyId),removed);await assertFails(removal.commit());
  }finally{await deleteApp(owner.app);}
 });

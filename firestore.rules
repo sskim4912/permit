@@ -86,6 +86,7 @@ service cloud.firestore {
         && (!('notification_queue_id' in resource.data) || request.resource.data.notification_queue_id==resource.data.notification_queue_id)
         && keepStages(resource.data,request.resource.data)
         && (!('visit_end_date' in resource.data) || ('visit_end_date' in request.resource.data))
+        && (!('company' in resource.data) || ('company' in request.resource.data))
         && (!('delivery_at' in resource.data) || ('delivery_at' in request.resource.data))
         && (isAdmin() ? request.resource.data.reviewer.size() > 0 : request.resource.data.modified_by.size() > 0)
         && request.resource.data.version == resource.data.version + 1
