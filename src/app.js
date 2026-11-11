@@ -182,7 +182,7 @@ async function downloadWorkbook(detailed=false,seetec=false){
  if(!admin)return;const button=$(seetec?'downloadSeetecExcel':detailed?'downloadDetailedExcel':'downloadExcel');if(button.disabled)return;button.disabled=true;
  try{if(!(await api('session')).reviewer)throw Error('다시 관리자 로그인해 주세요.');const data=sortRows((await api('requests')).filter(matchesFilters));if(!admin)throw Error('다시 관리자 로그인해 주세요.');if(!data.length){toast('다운로드할 내역이 없습니다.');return;}
  const exporter=await import('/xlsx-export.js');const buffer=await (seetec?exporter.createSeetecWorkbook:detailed?exporter.createDetailedWorkbook:exporter.createApplicantWorkbook)(data);if(!admin)return;
- const url=URL.createObjectURL(new Blob([buffer],{type:seetec?'application/vnd.ms-excel':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));const link=document.createElement('a');link.href=url;link.download=seetec?'씨텍_출입예약_양식.xls':detailed?'출입신청_상세내역.xlsx':'출입신청_명단.xlsx';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ const url=URL.createObjectURL(new Blob([buffer],{type:seetec?'application/vnd.ms-excel':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));const link=document.createElement('a');link.href=url;link.download=seetec?'Aurora.xls':detailed?'출입신청_상세내역.xlsx':'출입신청_명단.xlsx';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
  }catch(e){$('adminError').textContent=e.message;}finally{button.disabled=false;}
 }
 $('downloadExcel').onclick=()=>downloadWorkbook();

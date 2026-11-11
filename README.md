@@ -68,8 +68,8 @@ GitHub Actions가 `permit-firebase-setup` 또는 `main` push에서 빌드·화�
 
 ## 씨텍 출입예약 원본 양식 다운로드
 
-관리 설정의 ‘씨텍 출입예약 양식 다운로드’는 현재 조회 기간·상태·검색·정렬 조건에 맞는 관리자 원본 자료를 `씨텍_출입예약_양식.xls`로 저장합니다. 원본 13열(빈 H/J열 포함), 제목·필수 항목 색상·테두리를 유지하고 예시 행은 제외합니다. 성명은 방문자 이름, 생년월일은 YYMMDD 문자, 차종란은 차명, 휴대폰은 휴대전화에 대응합니다. 회사명·부서명·주소·일반전화·메일은 빈칸이며 요청팀을 방문자 소속으로 추정하지 않습니다. 수식처럼 보이는 입력도 문자열로 기록합니다.
+관리 설정의 ‘씨텍 출입예약 양식 다운로드’는 현재 조회 기간·상태·검색·정렬 조건에 맞는 관리자 원본 자료를 `Aurora.xls`로 저장합니다. 원본 13열(빈 H/J열 포함), 1~5행의 제목·입력 예시·안내문과 원본 열 너비·색상·서식을 유지합니다. 실제 자료는 색 없는 A6:M6부터 아래로 한 명씩 입력하며 기존의 빈 입력 행도 유지합니다. 성명은 방문자 이름, 생년월일은 YYMMDD 문자, 차종란은 차명, 휴대폰은 휴대전화에 대응합니다. 회사명·부서명·주소·일반전화·메일은 빈칸이며 요청팀을 방문자 소속으로 추정하지 않습니다. 수식처럼 보이는 입력도 문자열로 기록합니다.
 
-브라우저에서 원본 BIFF8 서식과 CFB 컨테이너로 실제 XLS를 생성하므로 서버나 추가 유료 서비스가 필요하지 않습니다. A4 가로, 인쇄 영역 A1:M(마지막 행), 가로/세로 한 페이지를 지정하며 인원이 많으면 글씨가 작아집니다. XLS 한계인 데이터 65,535행을 초과하면 오류를 표시하고 자르지 않습니다. 기존 XLSX 다운로드는 그대로 유지합니다.
+브라우저에서 원본 BIFF8 서식과 CFB 컨테이너로 실제 XLS를 생성하므로 서버나 추가 유료 서비스가 필요하지 않습니다. A4 가로, 인쇄 영역 A1:M(마지막 행), 가로/세로 한 페이지를 지정하며 인원이 많으면 글씨가 작아집니다. XLS 한계인 데이터 65,531행을 초과하면 오류를 표시하고 자르지 않습니다. 기존 XLSX 다운로드는 그대로 유지합니다.
 
-원본은 `public/templates/seetec-entry-original.xls`, 추출 서식은 `src/seetec-template.json`입니다. 양식 변경 시 `python3 scripts/extract-seetec-template.py`로 재추출합니다. XLS 검증에는 독립 판독기 xlrd 2.0.2를 사용합니다: `python3 -m pip install --target /tmp/permit-xls-tools xlrd==2.0.2` 후 `PYTHONPATH=/tmp/permit-xls-tools npm run test:ui`. CI에도 동일 검증이 포함됩니다.
+원본은 `public/templates/Aurora.xls`, 추출 서식은 `src/seetec-template.json`입니다. 양식 변경 시 `python3 scripts/extract-seetec-template.py`로 재추출합니다. XLS 검증에는 독립 판독기 xlrd 2.0.2를 사용합니다: `python3 -m pip install --target /tmp/permit-xls-tools xlrd==2.0.2` 후 `PYTHONPATH=/tmp/permit-xls-tools npm run test:ui`. CI에도 동일 검증이 포함됩니다.
