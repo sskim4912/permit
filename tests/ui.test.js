@@ -83,8 +83,8 @@ test('mail opening alone never marks delivered; explicit sent confirmation recor
 test('administrator deletion requires confirmation and clears selected rows',async()=>{
  const {dom,w,d,login,calls}=await setup();try{await login();d.querySelector('#reviewer').value='담당자';d.querySelector('[data-select="one"]').click();w.confirm=()=>false;await d.querySelector('#delete').onclick();assert.equal(calls.length,0);w.confirm=()=>true;await d.querySelector('#delete').onclick();assert.equal(calls[0].data.action,'delete');assert.equal(d.querySelector('[data-record="one"]'),null);}finally{dom.window.close();}
 });
-test('inline editor retains unsaved edits across refresh and cancellation restores applicant draft',async()=>{
- const {dom,w,d,login,enter,calls,submit}=await setup();try{enter('name','작성중 방문자');await tick();await login();d.querySelector('[data-edit="one"]').click();assert.ok(d.querySelector('#list #requestForm'));assert.equal(d.querySelector('#formHome #requestForm'),null);enter('purpose','수정된 회의');await d.querySelector('#refresh').onclick();assert.equal(d.querySelector('[name="purpose"]').value,'수정된 회의');assert.equal(d.querySelectorAll('.inline-editor-row').length,1);d.querySelector('#cancelEdit').click();assert.equal(d.querySelector('[name="name"]').value,'작성중 방문자');d.querySelector('[data-edit="one"]').click();d.querySelector('#reviewer').value='담당자';enter('purpose','최종 수정');await submit();assert.equal(calls[0].path,'update');assert.equal(calls[0].data.purpose,'최종 수정');assert.equal(d.querySelectorAll('.inline-editor-row').length,0);assert.equal(JSON.parse(w.sessionStorage.getItem('permit-draft'))[0].name,'작성중 방문자');}finally{dom.window.close();}
+test('dialog editor retains unsaved edits across refresh and cancellation restores applicant draft',async()=>{
+ const {dom,w,d,login,enter,calls,submit}=await setup();try{enter('name','작성중 방문자');await tick();await login();d.querySelector('[data-details=one]').click();d.querySelector('[data-edit="one"]').click();assert.ok(d.querySelector('#recordEditorHost #requestForm'));assert.equal(d.querySelector('#formHome #requestForm'),null);enter('purpose','수정된 회의');await d.querySelector('#refresh').onclick();assert.equal(d.querySelector('[name="purpose"]').value,'수정된 회의');assert.equal(d.querySelector('#recordDialog').open,true);d.querySelector('#cancelEdit').click();assert.equal(d.querySelector('[name="name"]').value,'작성중 방문자');d.querySelector('[data-details=one]').click();d.querySelector('[data-edit="one"]').click();d.querySelector('#reviewer').value='담당자';enter('purpose','최종 수정');await submit();assert.equal(calls[0].path,'update');assert.equal(calls[0].data.purpose,'최종 수정');assert.equal(d.querySelectorAll('.inline-editor-row').length,0);assert.equal(JSON.parse(w.sessionStorage.getItem('permit-draft'))[0].name,'작성중 방문자');}finally{dom.window.close();}
 });
 test('admin workbook keeps phone zeros and literal values; logout removes original birth and admin controls',async()=>{
  const {dom,d,login,getBlob}=await setup();try{
@@ -93,7 +93,7 @@ test('admin workbook keeps phone zeros and literal values; logout removes origin
  }finally{dom.window.close();}
 });
 test('status and search filters clear selections and map legacy statuses without rewriting data',async()=>{
- const {dom,d,login,change,records}=await setup();try{await login();assert.ok(d.querySelector('.roster-table thead #selectAll'));assert.equal(d.querySelector('.bulk-toolbar #selectAll'),null);assert.equal(d.querySelectorAll('[data-select]:checked').length,0);d.querySelector('[data-select="one"]').click();change('statusFilter','승인 대기');assert.equal(d.querySelectorAll('[data-record]').length,2);assert.equal(d.querySelector('#selectedCount').textContent,'0명 선택 · 최대 10명');assert.match(d.querySelector('#list').textContent,/기존 전달 기록/);assert.equal(records()[0].status,'현장 제출');assert.equal(records()[1].status,'발주처 제출');change('statusFilter','승인 완료');assert.equal(d.querySelectorAll('[data-record]').length,1);}finally{dom.window.close();}
+ const {dom,d,login,change,records}=await setup();try{await login();assert.ok(d.querySelector('.roster-table thead #selectAll'));assert.equal(d.querySelector('.bulk-toolbar #selectAll'),null);assert.equal(d.querySelectorAll('[data-select]:checked').length,0);d.querySelector('[data-select="one"]').click();change('statusFilter','승인 대기');assert.equal(d.querySelectorAll('[data-record]').length,2);assert.equal(d.querySelector('#selectedCount').textContent,'0명 선택 · 최대 10명');d.querySelector('[data-details=two]').click();assert.match(d.querySelector('#recordDetails').textContent,/기존 전달 기록/);assert.equal(records()[0].status,'현장 제출');assert.equal(records()[1].status,'발주처 제출');change('statusFilter','승인 완료');assert.equal(d.querySelectorAll('[data-record]').length,1);}finally{dom.window.close();}
 });
 
 test('visit periods validate ordering, filter inclusive dates and survive edit, email and detailed Excel',async()=>{
@@ -106,14 +106,14 @@ test('visit periods validate ordering, filter inclusive dates and survive edit, 
   change('dateFilter','2026-10-24');assert.equal(d.querySelectorAll('[data-record]').length,0);
   change('dateFilter','2026-10-23');await login();d.querySelector('#reviewer').value='담당자';d.querySelector('[data-select]').click();await d.querySelector('#mail').onclick();assert.match(d.querySelector('#mailPreview').textContent,/2026-10-20 ~ 2026-10-23/);
   await d.querySelector('#downloadDetailedExcel').onclick();const book=new ExcelJS.Workbook();await book.xlsx.load(await getBlob().arrayBuffer());assert.equal(book.worksheets[0].getCell('C2').value,'2026-10-23');
-  d.querySelector('[data-edit]').click();assert.equal(d.querySelector('[name="visit_end_date"]').value,'2026-10-23');enter('visit_end_date','2026-10-25');await submit();assert.equal(records().find(r=>r.id==='new0').visit_end_date,'2026-10-25');
+  d.querySelector('[data-select]').closest('[data-record]').querySelector('[data-details]').click();d.querySelector('[data-edit]').click();assert.equal(d.querySelector('[name="visit_end_date"]').value,'2026-10-23');enter('visit_end_date','2026-10-25');await submit();assert.equal(records().find(r=>r.id==='new0').visit_end_date,'2026-10-25');
  }finally{dom.window.close();}
 });
 test('legacy drafts and records use a same-day end; starting date changes keep same-day visits aligned',async()=>{
  const {dom,w,d,login,change}=await setup({draft:[{...base}]});try{
   assert.equal(d.querySelector('[name="visit_end_date"]').value,base.visit_date);
   const start=d.querySelector('[name="visit_date"]');start.value='2026-10-21';start.dispatchEvent(new w.Event('change',{bubbles:true}));assert.equal(d.querySelector('[name="visit_end_date"]').value,'2026-10-21');
-  await login();d.querySelector('[data-edit]').click();assert.equal(d.querySelector('[name="visit_end_date"]').value,base.visit_date);
+  await login();d.querySelector('[data-select]').closest('[data-record]').querySelector('[data-details]').click();d.querySelector('[data-edit]').click();assert.equal(d.querySelector('[name="visit_end_date"]').value,base.visit_date);
   change('dateFilter','2026-10-16');assert.equal(d.querySelectorAll('[data-record]').length,1); // unsaved editor remains visible
  }finally{dom.window.close();}
 });
@@ -127,20 +127,20 @@ test('one author is required per submission and is saved with every visitor',asy
 test('applicant edit and confirmed deletion reuse stored author without processor input',async()=>{
  const {dom,w,d,submit,calls,enter,records}=await setup({own:true});try{
   assert.equal(d.querySelector('#mail').hidden,true);assert.equal(d.querySelector('#adminActor').hidden,true);
-  d.querySelector('[data-edit]').click();assert.ok(d.querySelector('#list #requestForm'));enter('purpose','본인 수정');await submit();assert.equal(calls[0].data.reviewer,'최초 작성자');assert.equal(records()[0].author_name,'최초 작성자');
+  d.querySelector('[data-select]').closest('[data-record]').querySelector('[data-details]').click();d.querySelector('[data-edit]').click();assert.ok(d.querySelector('#recordEditorHost #requestForm'));enter('purpose','본인 수정');await submit();assert.equal(calls[0].data.reviewer,'최초 작성자');assert.equal(records()[0].author_name,'최초 작성자');
   d.querySelector('[data-select]').click();w.confirm=()=>false;await d.querySelector('#delete').onclick();assert.equal(calls.length,1);w.confirm=()=>true;await d.querySelector('#delete').onclick();assert.equal(calls[1].path,'owner-delete');assert.equal(d.querySelector('[data-record="one"]'),null);
  }finally{dom.window.close();}
 });
 test('delivered and approved own applications remain visible but cannot be selected or edited',async()=>{
  const {dom,d,records}=await setup({own:true});try{
-  records()[0].delivery_at='2026-10-16T00:00:00Z';await d.querySelector('#refresh').onclick();assert.equal(d.querySelectorAll('[data-edit]').length,0);assert.equal(d.querySelectorAll('[data-select]').length,0);assert.match(d.querySelector('#list').textContent,/관리자에게 문의/);
+  records()[0].delivery_at='2026-10-16T00:00:00Z';await d.querySelector('#refresh').onclick();assert.equal(d.querySelectorAll('[data-edit]').length,0);assert.equal(d.querySelectorAll('[data-select]').length,0);d.querySelector('[data-details=one]').click();assert.match(d.querySelector('#recordDialog').textContent,/관리자에게 문의/);
  }finally{dom.window.close();}
 });
 
 test('row deletion requires confirmation while author search remains available',async()=>{
  const {dom,w,d,calls,records}=await setup({own:true});try{
   d.querySelector('#search').value='최초 작성자';await d.querySelector('#refresh').onclick();assert.equal(d.querySelectorAll('[data-record]').length,1);
-  const click=()=>d.querySelector('#list').onclick({target:d.querySelector('[data-delete="one"]')});w.confirm=()=>false;await click();assert.equal(calls.length,0);w.confirm=()=>true;await click();assert.equal(calls[0].path,'owner-delete');assert.equal(records().length,2);
+  d.querySelector('[data-details=one]').click();const click=()=>d.querySelector('#recordActions').onclick({target:d.querySelector('[data-delete="one"]')});w.confirm=()=>false;await click();assert.equal(calls.length,0);w.confirm=()=>true;await click();assert.equal(calls[0].path,'owner-delete');assert.equal(records().length,2);
  }finally{dom.window.close();}
 });
 test('unowned requests cannot expose edit/delete actions or personal information',async()=>{
@@ -186,7 +186,7 @@ test('anonymous user without owned rows cannot export public rows as applicant C
 
 test('applicant edits without entering processor name and retains original author',async()=>{
  const {dom,d,enter,submit,calls}=await setup({own:true});try{
-  assert.equal(d.querySelector('#adminActor').hidden,true);d.querySelector('[data-edit="one"]').click();assert.equal(d.querySelector('#cancelEdit').hidden,false);enter('name','김진동');await submit();assert.equal(calls[0].data.reviewer,'최초 작성자');assert.equal(calls[0].path,'owner-update');
+  assert.equal(d.querySelector('#adminActor').hidden,true);d.querySelector('[data-details=one]').click();d.querySelector('[data-edit="one"]').click();assert.equal(d.querySelector('#cancelEdit').hidden,false);enter('name','김진동');await submit();assert.equal(calls[0].data.reviewer,'최초 작성자');assert.equal(calls[0].path,'owner-update');
  }finally{dom.window.close();}
 });
 test('administrator saves multiple recipient settings and displays the same recipient list for submission',async()=>{
@@ -198,9 +198,9 @@ test('administrator saves multiple recipient settings and displays the same reci
 
 test('applicant can edit after administrator corrects visitor name without changing author',async()=>{
  const {dom,d,login,enter,submit,records}=await setup({own:true});try{
-  await login();d.querySelector('#reviewer').value='관리자';d.querySelector('[data-edit="one"]').click();enter('name','김진동');await submit();
+  await login();d.querySelector('#reviewer').value='관리자';d.querySelector('[data-details=one]').click();d.querySelector('[data-edit="one"]').click();enter('name','김진동');await submit();
   assert.equal(records().find(r=>r.id==='one').author_name,'최초 작성자');
-  await d.querySelector('#login').onclick();d.querySelector('#reviewer').value='최초 작성자';d.querySelector('[data-edit="one"]').click();
+  await d.querySelector('#login').onclick();d.querySelector('#reviewer').value='최초 작성자';d.querySelector('[data-details=one]').click();d.querySelector('[data-edit="one"]').click();
   assert.equal(d.querySelector('[name="name"]').value,'김진동');enter('purpose','신청자가 다시 수정한 방문목적');await submit();
   assert.equal(records().find(r=>r.id==='one').purpose,'신청자가 다시 수정한 방문목적');
  }finally{dom.window.close();}
@@ -360,12 +360,12 @@ test('editing and roster notification lookup query the selected request rather t
  const {dom,d,enter,submit,notifications,setNotifyResult,setRequestNotifyResult,calls,login}=await setup({own:true});try{
   setNotifyResult({results:[{team:'최근 신청',channel:'sms',status:'pending',retryable:true,message:'최근 건은 아직 대기'}]});enter('purpose','회의');enter('team','관리팀');enter('name','다른 신규 방문자');enter('birth','19900101');enter('phone','01000000000');await submit();
   setRequestNotifyResult('one',{updated_at:'2026-10-15T03:00:00Z',results:[{team:'선택 팀',recipient:'선택 담당자',channel:'sms',status:'sent',delivery_status:'delivered',delivery_message:'선택 건 발송 성공'}]});
-  d.querySelector('[data-edit=one]').click();await tick();assert.equal(notifications.at(-1).request_id,'one');assert.ok(!d.querySelector('#notificationResult').textContent.includes('최근 건은 아직 대기'));await d.querySelector('#retryNotifications').onclick();assert.equal(d.querySelector('#notificationDialog').open,true);assert.match(d.querySelector('#notificationContext').textContent,/가상방문자/);assert.match(d.querySelector('#notificationDetails').textContent,/선택 담당자/);assert.match(d.querySelector('#notificationDetails').textContent,/발송 성공/);assert.match(d.querySelector('#notificationCheckTime').textContent,/조회 시각/);
-  setRequestNotifyResult('one',{results:[{team:'선택 팀',recipient:'선택 담당자',channel:'sms',status:'sent',delivery_status:'delivery_failed',delivery_message:'통신사 결과 확인 필요'}]});await d.querySelector('#refreshNotification').onclick();assert.match(d.querySelector('#notificationDetails').textContent,/최종 발송 실패/);assert.equal(notifications.at(-1).request_id,'one');assert.equal(calls.filter(c=>c.path==='requests').length,1);assert.equal(d.querySelector('[data-record=two] [data-notification]'),null);await login();setRequestNotifyResult('two',{results:[{team:'다른 팀',recipient:'다른 담당자',channel:'sms',status:'sent'}]});d.querySelector('[data-notification=two]').click();await tick();assert.equal(notifications.at(-1).request_id,'two');await d.querySelector('#login').onclick();assert.equal(d.querySelector('#notificationDialog').open,false);assert.equal(d.querySelector('#notificationDetails').textContent,'');
+  d.querySelector('[data-details=one]').click();d.querySelector('[data-edit=one]').click();await tick();assert.equal(notifications.at(-1).request_id,'one');assert.ok(!d.querySelector('#notificationResult').textContent.includes('최근 건은 아직 대기'));await d.querySelector('#retryNotifications').onclick();assert.equal(d.querySelector('#notificationDialog').open,true);assert.match(d.querySelector('#notificationContext').textContent,/가상방문자/);assert.match(d.querySelector('#notificationDetails').textContent,/선택 담당자/);assert.match(d.querySelector('#notificationDetails').textContent,/발송 성공/);assert.match(d.querySelector('#notificationCheckTime').textContent,/조회 시각/);
+  setRequestNotifyResult('one',{results:[{team:'선택 팀',recipient:'선택 담당자',channel:'sms',status:'sent',delivery_status:'delivery_failed',delivery_message:'통신사 결과 확인 필요'}]});await d.querySelector('#refreshNotification').onclick();assert.match(d.querySelector('#notificationDetails').textContent,/최종 발송 실패/);assert.equal(notifications.at(-1).request_id,'one');assert.equal(calls.filter(c=>c.path==='requests').length,1);assert.equal(d.querySelector('[data-record=two] [data-notification]'),null);await login();setRequestNotifyResult('two',{results:[{team:'다른 팀',recipient:'다른 담당자',channel:'sms',status:'sent'}]});d.querySelector('[data-details=two]').click();d.querySelector('[data-notification=two]').click();await tick();assert.equal(notifications.at(-1).request_id,'two');await d.querySelector('#login').onclick();assert.equal(d.querySelector('#notificationDialog').open,false);assert.equal(d.querySelector('#notificationDetails').textContent,'');
  }finally{dom.window.close();}
 });
 test('manual notification lookup opens immediately with a loading state and reports query errors',async()=>{
- const {dom,d,setNotifyHook}=await setup({own:true});try{let resolve;setNotifyHook(()=>new Promise(r=>{resolve=r;}));d.querySelector('[data-notification=one]').click();assert.equal(d.querySelector('#notificationDialog').open,true);assert.equal(d.querySelector('#refreshNotification').disabled,true);assert.match(d.querySelector('#notificationDetails').textContent,/조회하고 있습니다/);resolve({results:[{team:'관리팀',recipient:'담당자',channel:'sms',status:'pending',message:'발송 대기'}]});await tick();assert.equal(d.querySelector('#refreshNotification').disabled,false);assert.match(d.querySelector('#notificationDetails').textContent,/발송 대기/);setNotifyHook(()=>{throw Error('서버 연결 실패');});await d.querySelector('#refreshNotification').onclick();assert.match(d.querySelector('#notificationDetails').textContent,/조회 오류: 서버 연결 실패/);}finally{dom.window.close();}
+ const {dom,d,setNotifyHook}=await setup({own:true});try{let resolve;setNotifyHook(()=>new Promise(r=>{resolve=r;}));d.querySelector('[data-details=one]').click();d.querySelector('[data-notification=one]').click();assert.equal(d.querySelector('#notificationDialog').open,true);assert.equal(d.querySelector('#refreshNotification').disabled,true);assert.match(d.querySelector('#notificationDetails').textContent,/조회하고 있습니다/);resolve({results:[{team:'관리팀',recipient:'담당자',channel:'sms',status:'pending',message:'발송 대기'}]});await tick();assert.equal(d.querySelector('#refreshNotification').disabled,false);assert.match(d.querySelector('#notificationDetails').textContent,/발송 대기/);setNotifyHook(()=>{throw Error('서버 연결 실패');});await d.querySelector('#refreshNotification').onclick();assert.match(d.querySelector('#notificationDetails').textContent,/조회 오류: 서버 연결 실패/);}finally{dom.window.close();}
 });
 
 
@@ -388,11 +388,11 @@ test('manual dispatch shortcut is admin-only and explicitly preserves automatic 
  const {dom,d,login}=await setup({own:true});try{assert.equal(d.querySelector('#manualNotificationActions').hidden,true);await login();assert.equal(d.querySelector('#manualNotificationActions').hidden,false);assert.match(d.querySelector('#manualNotificationActions').textContent,/자동 발송은 유지/);assert.match(d.querySelector('#manualNotificationActions').textContent,/Run workflow/);assert.match(d.querySelector('#manualNotificationActions a').href,/notify-queue.yml$/);await d.querySelector('#login').onclick();assert.equal(d.querySelector('#manualNotificationActions').hidden,true);}finally{dom.window.close();}
 });
 
-test('expanded visitor details survive refresh and the mobile action bar follows actual selection',async()=>{
+test('separate visitor details survive refresh without expanding table rows and the mobile action bar follows actual selection',async()=>{
  const {dom,d}=await setup({own:true});try{
-  const detail=d.querySelector('[data-record=one] .record-info');detail.open=true;
+  d.querySelector('[data-details=one]').click();
   await d.querySelector('#refresh').onclick();
-  assert.equal(d.querySelector('[data-record=one] .record-info').open,true);
+  assert.equal(d.querySelector('#recordDialog').open,true);assert.ok(!d.querySelector('[data-record=one] details'));assert.equal(d.querySelectorAll('#recordDetails .record-purpose').length,1);
   assert.equal(d.body.classList.contains('has-selection'),false);
   const checkbox=d.querySelector('[data-select=one]');checkbox.checked=true;checkbox.dispatchEvent(new dom.window.Event('change',{bubbles:true}));
   assert.equal(d.body.classList.contains('has-selection'),true);
@@ -430,9 +430,30 @@ test('visitor company is required, defaults from the first visitor, stays indivi
 test('company drafts restore without overwriting per-visitor values; legacy records stay blank until edited',async()=>{
  const {company,...legacy}=base;
  const {dom,d,records,login,enter,submit,calls}=await setup({draft:[legacy],defaultCompany:false});try{
-  assert.equal(d.querySelector('[name=company]').value,'');delete records()[0].company;await login();await d.querySelector('#refresh').onclick();d.querySelector('[data-edit=one]').click();
+  assert.equal(d.querySelector('[name=company]').value,'');delete records()[0].company;await login();await d.querySelector('#refresh').onclick();d.querySelector('[data-details=one]').click();d.querySelector('[data-edit=one]').click();
   assert.equal(d.querySelector('[name=company]').value,'');d.querySelector('#reviewer').value='수정담당';await submit();assert.equal(d.activeElement.name,'company');
   enter('company','추가회사');await submit();assert.equal(calls.find(c=>c.path==='update').data.company,'추가회사');
  }finally{dom.window.close();}
  const restored=await setup({draft:[{...base,company:'회사A'},{...base,company:'회사B'}],defaultCompany:false});try{assert.deepEqual([...restored.d.querySelectorAll('[name=company]')].map(e=>e.value),['회사A','회사B']);}finally{restored.dom.window.close();}
+});
+
+test('administrator edits from the detail dialog, enters reviewer locally, reuses it, and clears it on logout',async()=>{
+ const {dom,d,w,login,enter,submit,calls}=await setup();try{
+  await login();assert.equal(d.querySelector('#reviewer').value,'');d.querySelector('[data-details=one]').click();d.querySelector('[data-edit=one]').click();
+  assert.equal(d.querySelector('#recordDialog').open,true);assert.ok(d.querySelector('#recordEditorHost #requestForm'));enter('purpose','현장 방문 목적 수정');
+  await submit();assert.equal(calls.filter(c=>c.path==='update').length,0);assert.equal(d.activeElement.id,'recordReviewer');assert.match(d.querySelector('#recordError').textContent,/처리자 이름/);
+  d.querySelector('#recordReviewer').value='현장담당';d.querySelector('#recordReviewer').dispatchEvent(new w.Event('input',{bubbles:true}));await submit();
+  assert.equal(calls.find(c=>c.path==='update').data.reviewer,'현장담당');assert.equal(w.sessionStorage.getItem('permit-reviewer-session'),'현장담당');assert.equal(d.querySelector('#recordDialog').open,false);assert.equal(d.querySelector('#authorLine').hidden,false);
+  d.querySelector('[data-details=one]').click();assert.equal(d.querySelector('#recordReviewer').value,'현장담당');
+  await d.querySelector('#recordActions').onclick({target:d.querySelector('[data-delete=one]')});assert.equal(calls.find(c=>c.path==='bulk').data.reviewer,'현장담당');
+  await d.querySelector('#login').onclick();assert.equal(d.querySelector('#reviewer').value,'');assert.equal(w.sessionStorage.getItem('permit-reviewer-session'),null);assert.equal(d.querySelector('#recordDialog').open,false);assert.equal(d.querySelector('#recordDetails').textContent,'');
+ }finally{dom.window.close();}
+});
+
+test('public detail dialog shows full purpose without private company, original birth or management actions',async()=>{
+ const {dom,d}=await setup();try{
+  const row=d.querySelector('[data-record=one]');assert.equal(row.querySelectorAll('details,[data-edit],[data-delete]').length,0);d.querySelector('[data-details=one]').click();
+  assert.equal(d.querySelector('#recordDialog').open,true);assert.equal(d.querySelector('#recordDetails .record-purpose dd').textContent,base.purpose);assert.equal(d.querySelector('#recordReviewerBar').hidden,true);
+  assert.ok(!d.querySelector('#recordDetails').textContent.includes(base.birth));assert.ok(!d.querySelector('#recordDetails').textContent.includes(base.company));assert.equal(d.querySelectorAll('#recordDialog [data-edit],#recordDialog [data-delete],#recordDialog [data-notification]').length,0);
+ }finally{dom.window.close();}
 });
