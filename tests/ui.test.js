@@ -10,8 +10,8 @@ import ExcelJS from 'exceljs';
 import {createSeetecWorkbook} from '../src/seetec-export.js';
 import {createApplicantWorkbook,createDetailedWorkbook} from '../src/xlsx-export.js';
 const tick=()=>new Promise(resolve=>setTimeout(resolve,5));
-const base={visit_date:'2026-10-15',purpose:'회의',team:'공무팀',gate:'서문',name:'가상방문자',birth:'1990-01-23',phone:'010-0000-0000',plate:'=formula',vehicle_type:'승용',vehicle_name:'캐스퍼',role:'운전자',shoes:'280',lunch:'미신청',reviewer:'',version:1,created:'2026-10-15T00:00:00Z'};
-async function setup({draft=null,blocked=false,own=false}={}){
+const base={company:'검증회사',visit_date:'2026-10-15',purpose:'회의',team:'공무팀',gate:'서문',name:'가상방문자',birth:'1990-01-23',phone:'010-0000-0000',plate:'=formula',vehicle_type:'승용',vehicle_name:'캐스퍼',role:'운전자',shoes:'280',lunch:'미신청',reviewer:'',version:1,created:'2026-10-15T00:00:00Z'};
+async function setup({draft=null,blocked=false,own=false,defaultCompany=true}={}){
  const dom=new JSDOM(readFileSync('public/index.html','utf8'),{url:'https://permit.example',runScripts:'outside-only'}),w=dom.window,d=w.document;
  w.eval(readFileSync('src/notification-ui.js','utf8').replace('export function createNotificationUI','function createNotificationUI'));
  w.structuredClone=structuredClone;w.defaultTeams=defaultTeams;w.teamLabel=teamLabel;w.validateTeams=validateTeams;w.eval(readFileSync('src/directory-ui.js','utf8').replace(/import .*?;\n/,'').replace('export function createDirectoryUI','function createDirectoryUI').replace('export {defaultTeams,teamLabel};',''));
@@ -49,7 +49,7 @@ async function setup({draft=null,blocked=false,own=false}={}){
   if(path==='bulk'){calls.push({path,data:structuredClone(data)});for(const item of data.items){const row=records.find(row=>row.id===item.id);if(!row||row.version!==item.version)throw Error('선택 내역이 변경되었습니다.');}
    for(const item of data.items){const row=records.find(row=>row.id===item.id);if(data.action==='delete')records=records.filter(row=>row.id!==item.id);else{row.version++;row.reviewer=data.reviewer;if(data.action==='approve'){row.status='승인 완료';row.final_approved={by:data.reviewer,at:'2026-10-15T03:04:05Z'};}if(data.action==='delivered')row.delivery_at='2026-10-15T02:00:00Z';}}return {};}
  }});
- w.eval(readFileSync('src/app.js','utf8').replace("import {createNotificationUI} from './notification-ui.js';",'').replace("import {createDirectoryUI,defaultTeams,teamLabel} from './directory-ui.js';",'').replace("import {createPermitAPI} from './firebase-api.js';",'').replace("import {composeMailto} from './mail-recipients.js';",'').replace("import {buildMailDocument,buildDraftEmail} from './mail-document.js';",'').replace("import('/xlsx-export.js')",'loadApplicantExcel()'));await tick();d.querySelector('#authorName').value='테스트 작성자';d.querySelector('[name=lunch]').value='미신청';
+ w.eval(readFileSync('src/app.js','utf8').replace("import {createNotificationUI} from './notification-ui.js';",'').replace("import {createDirectoryUI,defaultTeams,teamLabel} from './directory-ui.js';",'').replace("import {createPermitAPI} from './firebase-api.js';",'').replace("import {composeMailto} from './mail-recipients.js';",'').replace("import {buildMailDocument,buildDraftEmail} from './mail-document.js';",'').replace("import('/xlsx-export.js')",'loadApplicantExcel()'));await tick();d.querySelector('#authorName').value='테스트 작성자';d.querySelector('[name=lunch]').value='미신청';if(defaultCompany)d.querySelector('[name=company]').value='검증회사';
  const enter=(key,value,index=0)=>{const input=d.querySelectorAll(`[name="${key}"]`)[index];input.value=key==='team'&&!defaultTeams.some(t=>t.name===value)?'관리팀':value;input.dispatchEvent(new w.Event('input',{bubbles:true}));return input;};
  const login=async()=>{await d.querySelector('#login').onclick();d.querySelector('#password').value='test-password';await d.querySelector('#loginForm').onsubmit({preventDefault(){}});await tick();};
  const change=(id,value)=>{d.querySelector('#'+id).value=value;d.querySelector('#'+id).dispatchEvent(new w.Event('change',{bubbles:true}));};
@@ -412,4 +412,27 @@ test('Seetec original XLS download is admin-only, uses current filters and produ
   assert.equal(d.querySelector('#downloadSeetecExcel').disabled,false);
   await d.querySelector('#login').onclick();assert.equal(d.querySelector('#adminSettings').hidden,true);
  }finally{dom.window.close();}
+});
+
+test('visitor company is required, defaults from the first visitor, stays individually editable and is submitted',async()=>{
+ const {dom,d,enter,submit,calls}=await setup({defaultCompany:false});try{
+  enter('purpose','회의');enter('team','관리팀');enter('name','첫방문자');enter('birth','19900101');enter('phone','01000000000');
+  await submit();assert.equal(d.activeElement.name,'company');assert.match(d.querySelector('#formError').textContent,/소속 회사명/);assert.equal(calls.length,0);
+  enter('company','첫회사');await tick();assert.equal(JSON.parse(dom.window.sessionStorage.getItem('permit-draft'))[0].company,'첫회사');
+  const fields=[...d.querySelectorAll('.person-fields [name]')].map(e=>e.name);assert.equal(fields.indexOf('company')+1,fields.indexOf('name'));
+  d.querySelector('#add').click();assert.equal(d.querySelectorAll('[name=company]')[1].value,'첫회사');enter('company','다른회사',1);
+  d.querySelector('#add').click();assert.equal(d.querySelectorAll('[name=company]')[2].value,'첫회사');d.querySelectorAll('.person-title button')[2].click();
+  enter('purpose','점검',1);enter('team','관리팀',1);enter('name','둘째방문자',1);enter('birth','19910203',1);enter('phone','01012345678',1);d.querySelectorAll('[name=lunch]')[1].value='미신청';
+  await submit();const saved=calls.find(c=>c.path==='requests');assert.deepEqual(saved.data.items.map(r=>r.company),['첫회사','다른회사']);
+ }finally{dom.window.close();}
+});
+
+test('company drafts restore without overwriting per-visitor values; legacy records stay blank until edited',async()=>{
+ const {company,...legacy}=base;
+ const {dom,d,records,login,enter,submit,calls}=await setup({draft:[legacy],defaultCompany:false});try{
+  assert.equal(d.querySelector('[name=company]').value,'');delete records()[0].company;await login();await d.querySelector('#refresh').onclick();d.querySelector('[data-edit=one]').click();
+  assert.equal(d.querySelector('[name=company]').value,'');d.querySelector('#reviewer').value='수정담당';await submit();assert.equal(d.activeElement.name,'company');
+  enter('company','추가회사');await submit();assert.equal(calls.find(c=>c.path==='update').data.company,'추가회사');
+ }finally{dom.window.close();}
+ const restored=await setup({draft:[{...base,company:'회사A'},{...base,company:'회사B'}],defaultCompany:false});try{assert.deepEqual([...restored.d.querySelectorAll('[name=company]')].map(e=>e.value),['회사A','회사B']);}finally{restored.dom.window.close();}
 });

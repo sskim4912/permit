@@ -12,7 +12,7 @@ import {initializeApp as initializeAdminApp, deleteApp as deleteAdminApp} from '
 import {getAuth as getAdminAuth} from 'firebase-admin/auth';
 let env,service,outsider,adminApp;
 const project='demo-permit';
-const item={visit_date:'2026-10-15',purpose:'회의',team:'안전팀',gate:'서문',name:'테스트 방문자',birth:'1990-01-01',phone:'010-0000-0000',plate:'',vehicle_type:'',vehicle_name:'',role:'도보',shoes:'필요없음'};
+const item={company:'검증회사',visit_date:'2026-10-15',purpose:'회의',team:'안전팀',gate:'서문',name:'테스트 방문자',birth:'1990-01-01',phone:'010-0000-0000',plate:'',vehicle_type:'',vehicle_name:'',role:'도보',shoes:'필요없음'};
 const pub=publicRoster;
 before(async()=>{
  env=await initializeTestEnvironment({projectId:project,firestore:{host:'127.0.0.1',port:8080,rules:readFileSync('firestore.rules','utf8')}});
@@ -251,4 +251,25 @@ test('free scheduled queue is atomic for ten visitors, private, deduplicated and
   const before=sent.length;const queue=(await db.doc('notificationQueue/'+created.queue_id).get()).data();await db.doc('notificationQueue/'+'d'.repeat(20)).set({...queue,status:'pending',leaseUntil:AdminTimestamp.fromMillis(0)});await worker();assert.equal(sent.length,before);
   const deleted=await owner.api('requests',{author_name:'삭제 알림 검증',items:[{...item,team:'관리팀',team_id:'management'}]});const row=(await owner.api('requests')).find(r=>r.id===deleted.ids[0]);await owner.api('owner-delete',{items:[row]});await worker();assert.equal(sent.length,before);assert.equal((await owner.api('notify',{queue_id:deleted.queue_id})).results[0].status,'failed');
  }finally{await deleteApp(owner.app);await deleteApp(other.app);await db.terminate();await deleteAdminApp(queueApp);}
+});
+
+test('company persists privately per visitor, rejects missing values and can be added to legacy applications',async()=>{
+ const key='4'.repeat(64),owner=createPermitAPI({config:{apiKey:'demo-key',projectId:project},emulator:true,name:'company-integration',ownerKey:key});
+ try{
+  const {company,...withoutCompany}=item;
+  await assert.rejects(()=>owner.api('requests',{author_name:'회사검증자',items:[withoutCompany]}),/필수/);
+  await assert.rejects(()=>owner.api('requests',{author_name:'회사검증자',items:[{...item,company:'   '}]}),/필수/);
+  const created=await owner.api('requests',{author_name:'회사검증자',items:[{...item,company:'첫회사'},{...item,name:'다른방문자',company:'다른회사'}]});
+  const db=getAdminFirestore(adminApp),records=await Promise.all(created.ids.map(id=>db.doc('requests/'+id).get()));
+  assert.deepEqual(records.map(r=>r.data().company),['첫회사','다른회사']);
+  const own=(await owner.api('requests')).filter(r=>created.ids.includes(r.id));assert.equal(own.find(r=>r.id===created.ids[0]).company,'첫회사');
+  assert.equal((await db.doc('publicRequests/'+created.ids[0]).get()).data().company,undefined);
+  const legacyId=created.ids[0],{company:oldCompany,...legacy}=records[0].data();await db.doc('requests/'+legacyId).set(legacy);await db.doc('applicantCopies/'+key+'/items/'+legacyId).set(legacy);
+  const row=(await owner.api('requests')).find(r=>r.id===legacyId);assert.equal(row.company,undefined);
+  await owner.api('owner-update',{...row,company:'수정회사',reviewer:'회사검증자'});
+  assert.equal((await db.doc('requests/'+legacyId).get()).data().company,'수정회사');
+  assert.equal((await db.doc('applicantCopies/'+key+'/items/'+legacyId).get()).data().company,'수정회사');
+  const publicDb=env.unauthenticatedContext().firestore(),bad={...withoutCompany,status:'승인 대기',reviewer:'',version:1,created:serverTimestamp()},batch=writeBatch(publicDb);
+  batch.set(doc(publicDb,'requests','company-missing-denied'),bad);batch.set(doc(publicDb,'publicRequests','company-missing-denied'),pub(bad));await assertFails(batch.commit());
+ }finally{await deleteApp(owner.app);}
 });

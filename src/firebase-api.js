@@ -16,7 +16,7 @@ export const firebaseConfig = {
 };
 export const ADMIN_UID = 'ICEik0y5U3aETq3mvW7sesAsNRB2';
 const ADMIN_EMAIL = 'sskim07@gsenc.com';
-const FIELDS = ['visit_date','visit_end_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team'];
+const FIELDS = ['visit_date','visit_end_date','purpose','gate','company','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team'];
 const stages = ['승인 대기','현장 제출','현장 확인','발주처 제출','승인 완료'];
 const editable = row => ['승인 대기','현장 제출'].includes(row.status) && !row.delivery_at;
 const personName = value => {const name=String(value||'').trim();if(!name||name.length>50)throw Error('작성·수정·삭제하는 분의 이름을 50자 이내로 입력해 주세요.');return name;};
@@ -27,7 +27,7 @@ function payload(item) {
     if(!/^\d{4}-\d{2}-\d{2}$/.test(value)||Number.isNaN(Date.parse(value))||new Date(value).toISOString().slice(0,10)!==value) throw Error('날짜를 YYYY-MM-DD 형식으로 확인해 주세요.');
   }
   if(result.visit_end_date<result.visit_date)throw Error('방문종료일은 방문시작일과 같거나 이후여야 합니다.');
-  if(['purpose','team','name','phone'].some(k=>!result[k])||Object.values(result).some(v=>v.length>200))throw Error('필수 항목을 입력하고 항목당 200자 이하로 작성해 주세요.');
+  if(['purpose','team','company','name','phone'].some(k=>!result[k])||Object.values(result).some(v=>v.length>200))throw Error('필수 항목을 입력하고 항목당 200자 이하로 작성해 주세요.');
   if(!['서문','정문'].includes(result.gate)||!['운전자','동승자','도보'].includes(result.role)||!['필요없음',...Array.from({length:15},(_,i)=>String(230+i*5))].includes(result.shoes))throw Error('출입위치, 탑승 구분, 안전화를 확인해 주세요.');
   if('lunch' in item){if(!['중식신청','미신청'].includes(item.lunch))throw Error('중식 신청 또는 미신청을 선택해 주세요.');result.lunch=item.lunch;}
   if(item.team_id){if(!/^[a-zA-Z0-9_-]{1,60}$/.test(item.team_id))throw Error('요청팀을 확인해 주세요.');result.team_id=item.team_id;}

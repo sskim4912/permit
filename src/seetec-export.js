@@ -12,7 +12,7 @@ const sourceRecords=records=>records.map(([id,data])=>({id,data:decode(data)}));
 const bodyHeight=rows=>Math.min(template.rowHeights[template.startRow],3000/rows.length);
 export function seetecValues(row){
  const birth=String(row.birth||'');
- return [row.name||'',/^\d{4}-\d{2}-\d{2}$/.test(birth)?birth.slice(2).replaceAll('-',''):'',row.purpose||'',row.plate||'',row.vehicle_name||'','','','','','','',row.phone||'',''].map(String);
+ return [row.name||'',/^\d{4}-\d{2}-\d{2}$/.test(birth)?birth.slice(2).replaceAll('-',''):'',row.purpose||'',row.plate||'',row.vehicle_name||'',row.company||'','','','','','',row.phone||'',''].map(String);
 }
 function cell(row,col,style,text){
  const address=join([word(row),word(col),word(style)]);

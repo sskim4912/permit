@@ -316,3 +316,6 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
 .gate-copy svg{flex:none}
 @media(min-width:721px){.heading{align-items:flex-start}.heading h1{padding-top:6px}}
 @media(max-width:720px){.gate-navigation-details{padding:10px 8px;gap:8px}.gate-navigation-name{font-size:10.5px}.gate-navigation-name strong{font-size:12px}.gate-copy{min-height:40px;font-size:11px;padding:8px 6px}}
+
+/* Keep company, visitor name and birth together in the desktop entry row. */
+@media(min-width:1201px){.person-fields{grid-template-columns:repeat(8,minmax(0,1fr))}}
