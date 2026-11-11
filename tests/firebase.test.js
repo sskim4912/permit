@@ -255,12 +255,13 @@ test('free scheduled queue is atomic for ten visitors, private, deduplicated and
 
 test('company persists privately per visitor, rejects missing values and can be added to legacy applications',async()=>{
  const key='4'.repeat(64),owner=createPermitAPI({config:{apiKey:'demo-key',projectId:project},emulator:true,name:'company-integration',ownerKey:key});
+ const companyApp=initializeAdminApp({projectId:project},'company-tests'),db=getAdminFirestore(companyApp);
  try{
   const {company,...withoutCompany}=item;
   await assert.rejects(()=>owner.api('requests',{author_name:'회사검증자',items:[withoutCompany]}),/필수/);
   await assert.rejects(()=>owner.api('requests',{author_name:'회사검증자',items:[{...item,company:'   '}]}),/필수/);
   const created=await owner.api('requests',{author_name:'회사검증자',items:[{...item,company:'첫회사'},{...item,name:'다른방문자',company:'다른회사'}]});
-  const db=getAdminFirestore(adminApp),records=await Promise.all(created.ids.map(id=>db.doc('requests/'+id).get()));
+  const records=await Promise.all(created.ids.map(id=>db.doc('requests/'+id).get()));
   assert.deepEqual(records.map(r=>r.data().company),['첫회사','다른회사']);
   const own=(await owner.api('requests')).filter(r=>created.ids.includes(r.id));assert.equal(own.find(r=>r.id===created.ids[0]).company,'첫회사');
   assert.equal((await db.doc('publicRequests/'+created.ids[0]).get()).data().company,undefined);
@@ -274,5 +275,5 @@ test('company persists privately per visitor, rejects missing values and can be 
   const stored=(await getDoc(doc(publicDb,'applicantCopies',key,'items',legacyId))).data(),{company:storedCompany,...stripped}=stored;
   const removed={...stripped,version:stored.version+1,modified_by:'회사검증자',modified_at:serverTimestamp()},removal=writeBatch(publicDb);
   removal.set(doc(publicDb,'requests',legacyId),removed);removal.set(doc(publicDb,'publicRequests',legacyId),pub(removed));removal.set(doc(publicDb,'applicantCopies',key,'items',legacyId),removed);await assertFails(removal.commit());
- }finally{await deleteApp(owner.app);}
+ }finally{await deleteApp(owner.app);await db.terminate();await deleteAdminApp(companyApp);}
 });
