@@ -414,6 +414,22 @@ test('Seetec original XLS download is admin-only, uses current filters and produ
  }finally{dom.window.close();}
 });
 
+test('Seetec download exports selected people and falls back to the filtered roster when none are selected',async()=>{
+ const {dom,d,login,change,getBlob}=await setup();try{
+  await login();
+  const names=['가상방문자','예시방문자','테스트방문자'];
+  const exported=async()=>{await d.querySelector('#downloadSeetecExcel').onclick();return Buffer.from(await getBlob().arrayBuffer());};
+  let file=await exported();for(const name of names)assert.ok(file.includes(Buffer.from(name,'utf16le')));
+  d.querySelector('[data-select="two"]').click();
+  file=await exported();for(const name of names)assert.equal(file.includes(Buffer.from(name,'utf16le')),name==='예시방문자');
+  d.querySelector('[data-select="one"]').click();
+  file=await exported();for(const name of names)assert.equal(file.includes(Buffer.from(name,'utf16le')),name!=='테스트방문자');
+  d.querySelector('[data-select="two"]').click();d.querySelector('[data-select="one"]').click();
+  change('statusFilter','승인 대기');file=await exported();
+  for(const name of names)assert.equal(file.includes(Buffer.from(name,'utf16le')),name!=='테스트방문자');
+ }finally{dom.window.close();}
+});
+
 test('visitor company is required, defaults from the first visitor, stays individually editable and is submitted',async()=>{
  const {dom,d,enter,submit,calls}=await setup({defaultCompany:false});try{
   enter('purpose','회의');enter('team','관리팀');enter('name','첫방문자');enter('birth','19900101');enter('phone','01000000000');
