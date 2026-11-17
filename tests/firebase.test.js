@@ -277,3 +277,20 @@ test('company persists privately per visitor, rejects missing values and can be 
   removal.set(doc(publicDb,'requests',legacyId),removed);removal.set(doc(publicDb,'publicRequests',legacyId),pub(removed));removal.set(doc(publicDb,'applicantCopies',key,'items',legacyId),removed);await assertFails(removal.commit());
  }finally{await deleteApp(owner.app);await db.terminate();await deleteAdminApp(companyApp);}
 });
+
+test('UI cache confirms targeted saves, manual refresh observes other clients, and logout drops administrator records',async()=>{
+ const owner=createPermitAPI({config:{apiKey:'demo-key',projectId:project},emulator:true,name:'cache-integration',ownerKey:'5'.repeat(64)});
+ const read=(force=false)=>owner.api('requests',undefined,{reuse:true,force});
+ try{
+  await read();const created=await owner.api('requests',{author_name:'캐시검증자',items:[item]});
+  let row=(await read()).find(r=>r.id===created.ids[0]);assert.equal(row.version,1);assert.equal(row.own,true);
+  await owner.api('owner-update',{...row,purpose:'캐시 수정',reviewer:'캐시검증자'});
+  row=(await read()).find(r=>r.id===row.id);assert.equal(row.version,2);assert.equal(row.purpose,'캐시 수정');
+  await owner.api('login',{password:'test-only-password'});assert.ok((await read()).some(r=>r.birth));
+  await owner.api('logout',{});assert.ok((await read()).filter(r=>!r.own).every(r=>!r.birth&&!r.owner_key));
+  await service.api('login',{password:'test-only-password'});await service.api('update',{...row,purpose:'다른 클라이언트',reviewer:'관리자'});
+  assert.equal((await read()).find(r=>r.id===row.id).purpose,'캐시 수정');
+  row=(await read(true)).find(r=>r.id===row.id);assert.equal(row.purpose,'다른 클라이언트');
+  await owner.api('owner-delete',{items:[row],reviewer:'캐시검증자'});assert.ok(!(await read()).some(r=>r.id===row.id));
+ }finally{await deleteApp(owner.app);}
+});

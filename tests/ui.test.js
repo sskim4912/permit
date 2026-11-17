@@ -12,7 +12,7 @@ import {createApplicantWorkbook,createDetailedWorkbook} from '../src/xlsx-export
 const tick=()=>new Promise(resolve=>setTimeout(resolve,5));
 const base={company:'검증회사',visit_date:'2026-10-15',purpose:'회의',team:'공무팀',gate:'서문',name:'가상방문자',birth:'1990-01-23',phone:'010-0000-0000',plate:'=formula',vehicle_type:'승용',vehicle_name:'캐스퍼',role:'운전자',shoes:'280',lunch:'미신청',reviewer:'',version:1,created:'2026-10-15T00:00:00Z'};
 async function setup({draft=null,blocked=false,own=false,defaultCompany=true}={}){
- const dom=new JSDOM(readFileSync('public/index.html','utf8'),{url:'https://permit.example',runScripts:'outside-only'}),w=dom.window,d=w.document;
+ const dom=new JSDOM(readFileSync('public/index.html','utf8'),{url:'https://permit.example',runScripts:'outside-only',pretendToBeVisual:true}),w=dom.window,d=w.document;
  w.eval(readFileSync('src/notification-ui.js','utf8').replace('export function createNotificationUI','function createNotificationUI'));
  w.structuredClone=structuredClone;w.defaultTeams=defaultTeams;w.teamLabel=teamLabel;w.validateTeams=validateTeams;w.eval(readFileSync('src/directory-ui.js','utf8').replace(/import .*?;\n/,'').replace('export function createDirectoryUI','function createDirectoryUI').replace('export {defaultTeams,teamLabel};',''));
  const NativeDate=w.Date;w.Date=class extends NativeDate{constructor(...args){super(...(args.length?args:['2026-10-15T03:00:00Z']));}};
@@ -471,5 +471,28 @@ test('public detail dialog shows full purpose without private company, original 
   const row=d.querySelector('[data-record=one]');assert.equal(row.querySelectorAll('details,[data-edit],[data-delete]').length,0);d.querySelector('[data-details=one]').click();
   assert.equal(d.querySelector('#recordDialog').open,true);assert.equal(d.querySelector('#recordDetails .record-purpose dd').textContent,base.purpose);assert.equal(d.querySelector('#recordReviewerBar').hidden,true);
   assert.ok(!d.querySelector('#recordDetails').textContent.includes(base.birth));assert.ok(!d.querySelector('#recordDetails').textContent.includes(base.company));assert.equal(d.querySelectorAll('#recordDialog [data-edit],#recordDialog [data-delete],#recordDialog [data-notification]').length,0);
+ }finally{dom.window.close();}
+});
+
+test('notification polling pauses in hidden tabs, backs off errors, stops at ten minutes and keeps manual refresh',async()=>{
+ const {dom,d,enter,submit,notifications,setNotifyResult,setNotifyHook,advanceNotificationClock,runNotificationPoll}=await setup();
+ try{
+  setNotifyResult({results:[{team:'관리팀',channel:'sms',status:'pending',retryable:true,message:'대기'}]});
+  for(const [key,value] of Object.entries({purpose:'회의',team:'관리팀',name:'가상방문자',birth:'19900101',phone:'01000000000'}))enter(key,value);
+  await submit();assert.equal(notifications.length,1);
+  Object.defineProperty(d,'visibilityState',{configurable:true,value:'hidden'});advanceNotificationClock(5000);await runNotificationPoll();assert.equal(notifications.length,1);
+  Object.defineProperty(d,'visibilityState',{configurable:true,value:'visible'});setNotifyHook(async()=>{throw Error('offline');});await runNotificationPoll();assert.equal(notifications.length,2);
+  advanceNotificationClock(5000);await runNotificationPoll();assert.equal(notifications.length,2);
+  advanceNotificationClock(5000);await runNotificationPoll();assert.equal(notifications.length,3);
+  advanceNotificationClock(600000);await runNotificationPoll();assert.equal(notifications.length,3);
+  setNotifyHook(null);await d.querySelector('#retryNotifications').onclick();assert.equal(notifications.length,4);
+ }finally{dom.window.close();}
+});
+
+test('quota error stops automatic notification reads',async()=>{
+ const {dom,enter,submit,notifications,setNotifyHook,advanceNotificationClock,runNotificationPoll}=await setup();
+ try{setNotifyHook(async()=>{const error=Error('quota');error.code='resource-exhausted';throw error;});
+ for(const [key,value] of Object.entries({purpose:'회의',team:'관리팀',name:'가상방문자',birth:'19900101',phone:'01000000000'}))enter(key,value);
+ await submit();assert.equal(notifications.length,1);advanceNotificationClock(300000);await runNotificationPoll();assert.equal(notifications.length,1);
  }finally{dom.window.close();}
 });

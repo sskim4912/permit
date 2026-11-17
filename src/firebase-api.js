@@ -1,3 +1,4 @@
+import {createRequestCache} from './request-cache.js';
 import {requestFastNotification} from './notification-trigger.js';
 import {defaultTeams,validateTeams} from '../functions/lib/directory.js';
 import {publicRoster} from './public-roster.js';
@@ -61,6 +62,7 @@ export function createPermitAPI({config=firebaseConfig, emulator=false, name='pe
     writer.set(doc(db,'requestDeletions',ref.id),{actor_name:actor,deleted_at:serverTimestamp(),author_name:before.author_name||'',owner_key:before.owner_key||'',version:before.version});
   }
   const requireAdmin=()=>{if(!isAdmin())throw Error('관리자 로그인이 필요합니다.');};
+  let directoryCache=null;
   async function api(path,data){await ready;try{
     if(path==='session')return {reviewer:isAdmin()};
     if(path==='login'){
@@ -71,8 +73,11 @@ export function createPermitAPI({config=firebaseConfig, emulator=false, name='pe
     if(path==='logout'){await signOut(auth);return {};}
     if(path==='directory'){
       const metaRef=doc(db,'settings','contactDirectory');
-      if(data){requireAdmin();const teams=validateTeams(data.teams);const existing=await getDocs(collection(db,'contactTeams'));await runTransaction(db,async tx=>{const meta=await tx.get(metaRef);if((meta.exists()?meta.data().version:0)!==data.version)throw Error('담당자 정보가 변경되었습니다. 창을 닫고 다시 열어 주세요.');for(const old of existing.docs)if(!teams.some(t=>t.id===old.id))tx.delete(old.ref);for(const team of teams){const {id,...record}=team;tx.set(doc(db,'contactTeams',id),record);}tx.set(metaRef,{version:data.version+1,modified_at:serverTimestamp()});});return {teams,version:data.version+1};}
-      const meta=await getDoc(metaRef);if(!meta.exists())return {teams:structuredClone(defaultTeams),version:0};const snapshot=await getDocs(collection(db,'contactTeams'));return {teams:snapshot.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.order-b.order),version:meta.data().version};
+      if(data){directoryCache=null;requireAdmin();const teams=validateTeams(data.teams);const existing=await getDocs(collection(db,'contactTeams'));await runTransaction(db,async tx=>{const meta=await tx.get(metaRef);if((meta.exists()?meta.data().version:0)!==data.version)throw Error('담당자 정보가 변경되었습니다. 창을 닫고 다시 열어 주세요.');for(const old of existing.docs)if(!teams.some(t=>t.id===old.id))tx.delete(old.ref);for(const team of teams){const {id,...record}=team;tx.set(doc(db,'contactTeams',id),record);}tx.set(metaRef,{version:data.version+1,modified_at:serverTimestamp()});});return {teams,version:data.version+1};}
+      const meta=await getDocFromServer(metaRef),version=meta.exists()?meta.data().version:0,scope=JSON.stringify([config.projectId,auth.currentUser?.uid||'',browserKey()]);
+      if(directoryCache?.scope===scope&&directoryCache.version===version)return structuredClone(directoryCache.value);
+      const value=!meta.exists()?{teams:structuredClone(defaultTeams),version:0}:{teams:(await getDocs(collection(db,'contactTeams'))).docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.order-b.order),version};
+      directoryCache={scope,version,value};return structuredClone(value);
     }
     if(path==='notify'){
       const key=browserKey();let owner=key,queueId=data.queue_id;
@@ -188,8 +193,29 @@ export function createPermitAPI({config=firebaseConfig, emulator=false, name='pe
     }
     throw Error('지원하지 않는 요청입니다.');
   }catch(error){
+    if(path==='directory')directoryCache=null;
     const messages={'auth/invalid-credential':'비밀번호가 맞지 않습니다.','auth/wrong-password':'비밀번호가 맞지 않습니다.','auth/user-not-found':'관리자 계정이 등록되지 않았습니다.','auth/too-many-requests':'로그인 시도가 많습니다. 잠시 후 다시 시도해 주세요.','auth/network-request-failed':'네트워크 연결을 확인해 주세요.','permission-denied':'접근 권한이 없습니다. Firestore 규칙과 관리자 계정을 확인해 주세요.','unavailable':'서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.'};
-    throw Error(messages[error.code]||error.message);
+    const failure=Error(messages[error.code]||error.message);failure.code=error.code;throw failure;
   }}
-  return {api,auth,db,app};
+  const requestCache=createRequestCache({
+    loadAll:()=>api('requests'),
+    async loadOne(id){
+      const administrator=isAdmin(),key=browserKey();
+      const snapshot=await getDocFromServer(administrator?doc(db,'requests',id):copyRef(key||'invalid',id));
+      return snapshot.exists()?{...serialize(snapshot),...(!administrator?{own:true}:{})}:null;
+    }
+  });
+  let cacheUID=auth.currentUser?.uid||'';
+  auth.onAuthStateChanged(user=>{const uid=user?.uid||'';if(uid!==cacheUID){cacheUID=uid;requestCache.clear();directoryCache=null;}});
+  async function cachedAPI(path,data,options){
+    await ready;
+    if(path==='requests'&&!data)return requestCache.read(JSON.stringify([config.projectId,auth.currentUser?.uid||'',isAdmin(),browserKey()]),{force:options?.force||!options?.reuse});
+    if(path==='login'||path==='logout'){requestCache.clear();directoryCache=null;}
+    let result;try{result=await api(path,data);}catch(error){if(data)requestCache.clear();throw error;}
+    if(data&&['requests','update','owner-update','approval','bulk','owner-delete'].includes(path)){
+      requestCache.changed(result.ids||data.items?.map(item=>item.id)||[data.id]);
+    }
+    return result;
+  }
+  return {api:cachedAPI,auth,db,app};
 }

@@ -4,8 +4,9 @@ import {enabledChannels} from './config.js';
 import {jobId,buildPlan,publicResults,dispatchTasks,sendTask} from './notifications.js';
 const hash=value=>createHash('sha256').update(value).digest('hex');
 export async function processNotificationQueue({db,Timestamp,config,send=sendTask,clock=Date.now,limit=5}){
- const meta=await db.doc('settings/contactDirectory').get();const teams=meta.exists?validateTeams((await db.collection('contactTeams').get()).docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.order-b.order)):defaultTeams;
  const queues=await db.collection('notificationQueue').where('status','in',['pending','retry','processing']).limit(limit).get();let processed=0,attempted=0,accepted=0,failed=0,unknown=0;
+ if(!queues.size)return {processed,scanned:0,attempted,accepted,failed,unknown};
+ const meta=await db.doc('settings/contactDirectory').get();const teams=meta.exists?validateTeams((await db.collection('contactTeams').get()).docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.order-b.order)):defaultTeams;
  for(const snapshot of queues.docs){
   const queueRef=snapshot.ref,now=clock();let ownerKey,jobRef,started=false;
   try{
