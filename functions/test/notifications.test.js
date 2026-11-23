@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {defaultTeams,validateTeams,teamLabel} from '../lib/directory.js';
-import {buildPlan,sendTask,dispatchTasks,DeliveryError,validateInput,jobId} from '../lib/notifications.js';
+import {buildPlan,buildSmsText,sendTask,dispatchTasks,DeliveryError,validateInput,jobId} from '../lib/notifications.js';
 const records=defaultTeams.slice(0,2).map((team,i)=>({team:team.name,team_id:team.id,author_name:'신청자',visit_date:'2026-10-31',visit_end_date:'2026-10-31',name:'방문자'+i,purpose:'점검 <script>alert(1)</script>',gate:'서문',birth:'1990-01-01',owner_key:'secret',phone:'010-0000-0000'}));
 const config=()=>({solapi:{apiKey:'test-key',apiSecret:'test-secret',from:'010-0000-0001'},microsoft365:{tenantId:'test-tenant',clientId:'test-client',clientSecret:'test-secret',sender:'sender@example.com'}});
 test('directory validates two contacts per team and compact labels',()=>{assert.equal(validateTeams(defaultTeams).length,11);assert.equal(teamLabel(defaultTeams[0]),'관리팀 이재훈, 김성석');assert.throws(()=>validateTeams([{...defaultTeams[0],contacts:[{name:'bad'}]}]));assert.throws(()=>validateTeams([defaultTeams[0],defaultTeams[0]]));});
@@ -18,4 +18,23 @@ test('SOLAPI can be configured before Microsoft 365 and incomplete supplied serv
 
 test('SOLAPI connection check uses a read-only balance API and never sends a message',async()=>{
  const {checkSolapi}=await import('../lib/solapi-check.js');let call;assert.equal(await checkSolapi(config(),{fetchImpl:async(url,options)=>{call={url,...options};return {ok:true};}}),true);assert.equal(call.url,'https://api.solapi.com/cash/v1/balance');assert.equal(call.method,'GET');assert.equal(call.body,undefined);assert.match(call.headers.Authorization,/^HMAC-SHA256/);await assert.rejects(()=>checkSolapi(config(),{fetchImpl:async()=>({ok:false,status:401})}),/HTTP 401/);
+});
+
+
+test('compact SMS includes only team, first visitor start date/name and team count',()=>{
+ const rows=[{...records[0],visit_date:'2026-11-23',visit_end_date:'2026-11-27',name:'배주영'}, {...records[0],name:'다른방문자'}];
+ assert.equal(buildSmsText('관리팀',rows),'[출입신청] 관리팀 11/23 배주영 2명.');
+ const tasks=buildPlan(rows,defaultTeams);
+ assert.ok(tasks.filter(t=>t.channel==='sms').every(t=>t.text==='[출입신청] 관리팀 11/23 배주영 2명.'));
+ assert.ok(tasks.find(t=>t.channel==='email').html.includes('2026-11-27'));
+ assert.ok(!tasks[0].text.includes('https://'));
+ const long=buildSmsText('아주긴요청팀'.repeat(20),[{...rows[0],name:'긴이름😀'.repeat(30)}]);
+ assert.ok(Buffer.byteLength(long,'utf8')<=90);assert.ok(!long.includes('�'));assert.match(long,/^\[출입신청\].*11\/23.*1명\.$/);
+});
+
+test('SOLAPI sends SMS without LMS subject and rejects oversized legacy messages before sending',async()=>{
+ const task=buildPlan(records.slice(0,1),defaultTeams)[0];let payload;
+ await sendTask(task,config(),{fetchImpl:async(url,options)=>{payload=JSON.parse(options.body);return {ok:true,json:async()=>({groupInfo:{_id:'sms-test'}})};}});
+ assert.equal(payload.messages[0].type,'SMS');assert.equal(payload.messages[0].text,task.text);assert.ok(!('subject' in payload.messages[0]));
+ await assert.rejects(()=>sendTask({...task,text:'가'.repeat(31)},config(),{fetchImpl:async()=>{assert.fail('oversized SMS must not reach provider');}}),e=>e instanceof DeliveryError&&!e.retryable&&!e.uncertain);
 });

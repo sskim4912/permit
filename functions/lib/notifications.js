@@ -3,12 +3,23 @@ const hash=value=>createHash('sha256').update(value).digest('hex');
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export const jobId=ids=>hash([...ids].sort().join(','));
 export function validateInput(body){if(!body||!Array.isArray(body.ids)||body.ids.length<1||body.ids.length>10||new Set(body.ids).size!==body.ids.length||body.ids.some(id=>typeof id!=='string'||!/^[A-Za-z0-9]{20}$/.test(id))||typeof body.ownerKey!=='string'||!/^[a-f0-9]{64}$/.test(body.ownerKey))throw Error('신청 정보를 확인해 주세요.');return body;}
+// UTF-8 is a conservative bound for Korean SMS: keep every message within 90 bytes.
+export function buildSmsText(team,rows){
+ const clean=value=>String(value??'').replace(/\s+/gu,' ').trim();
+ let teamName=Array.from(clean(team)),name=Array.from(clean(rows[0].name));
+ const date=rows[0].visit_date.slice(5).replace('-','/');
+ const render=()=>`[출입신청] ${teamName.join('')} ${date} ${name.join('')} ${rows.length}명.`;
+ while(Buffer.byteLength(render(),'utf8')>90){
+  const field=Buffer.byteLength(teamName.join(''),'utf8')>=Buffer.byteLength(name.join(''),'utf8')?teamName:name;
+  field.pop();
+ }
+ return render();
+}
 export function buildPlan(records,teams){
  const groups=new Map();for(const row of records){const team=teams.find(t=>t.id===row.team_id);if(!team||team.name!==row.team)throw Error('요청팀 담당자 정보가 변경되었거나 등록되지 않았습니다. 관리자에게 확인해 주세요.');if(!groups.has(team.id))groups.set(team.id,{team,rows:[]});groups.get(team.id).rows.push(row);}
  const tasks=[];for(const {team,rows} of groups.values()){
   const subject=`[출입신청] ${team.name} 방문 ${rows.length}명`;
-  let text=`${subject}\n신청자: ${rows[0].author_name}\n`+rows.map(r=>`${r.visit_date}${r.visit_end_date!==r.visit_date?'~'+r.visit_end_date:''} ${r.name} / ${r.gate} / ${String(r.purpose).slice(0,60)}`).join('\n')+'\n신청 확인: https://permit-daesan-461e8.web.app';
-  while(Buffer.byteLength(text,'utf8')>1800)text=text.slice(0,-1); // SOLAPI LMS limit, using a conservative UTF-8 bound.
+  const text=buildSmsText(team.name,rows);
   const fields=[['visit_date','방문시작일'],['visit_end_date','방문종료일'],['name','이름'],['birth','생년월일'],['phone','휴대전화'],['plate','차량번호'],['role','탑승 구분'],['purpose','방문목적'],['gate','출입위치'],['lunch','중식']];
   const html=`<div style="font-family:Arial,'Malgun Gothic',sans-serif;color:#234638"><h2>${esc(subject)}</h2><p>안녕하세요. 아래 방문 인원의 현장 출입 승인을 요청드립니다.</p><p>신청자: ${esc(rows[0].author_name)} · 요청팀: ${esc(team.name)}</p><table style="border-collapse:collapse;width:100%;font-size:13px"><thead><tr>${fields.map(([,label])=>`<th style="border:1px solid #cadbd0;padding:9px;background:#eaf3ee">${label}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${fields.map(([key])=>`<td style="border:1px solid #cadbd0;padding:9px;text-align:center">${esc(r[key]||'—')}</td>`).join('')}</tr>`).join('')}</tbody></table><p><a href="https://permit-daesan-461e8.web.app">출입신청 내역 확인</a></p></div>`;
   for(const channel of ['sms','email']){const targets=new Set();for(const contact of team.contacts){const to=channel==='sms'?contact.phone.replace(/\D/g,''):contact.email.toLowerCase();if(targets.has(to))continue;targets.add(to);tasks.push({id:hash(team.id+':'+channel+':'+to).slice(0,24),team:team.name,channel,to,recipient:contact.name,subject,text,html,status:'pending'});}}
@@ -20,8 +31,9 @@ export async function sendTask(task,config,{fetchImpl=fetch,deliveryKey}={}){
  let url,headers,body;
  if(task.channel==='sms'){
   if(!config.solapi?.apiKey||!config.solapi?.apiSecret||!/^0\d{8,10}$/.test(String(config.solapi?.from||'').replace(/\D/g,'')))throw new DeliveryError('솔라피 API 키와 등록된 발신번호 설정이 필요합니다.');
+  if(Buffer.byteLength(task.text,'utf8')>90)throw new DeliveryError('단문 문자 길이를 초과했습니다. 발송 내용을 확인해 주세요.',{retryable:false});
   const date=new Date().toISOString(),salt=randomBytes(16).toString('hex'),signature=createHmac('sha256',config.solapi.apiSecret).update(date+salt).digest('hex');
-  url='https://api.solapi.com/messages/v4/send-many/detail';headers={Authorization:`HMAC-SHA256 apiKey=${config.solapi.apiKey}, date=${date}, salt=${salt}, signature=${signature}`};body={messages:[{to:task.to,from:config.solapi.from.replace(/\D/g,''),text:task.text,type:'LMS',subject:task.subject.slice(0,35)}]};
+  url='https://api.solapi.com/messages/v4/send-many/detail';headers={Authorization:`HMAC-SHA256 apiKey=${config.solapi.apiKey}, date=${date}, salt=${salt}, signature=${signature}`};body={messages:[{to:task.to,from:config.solapi.from.replace(/\D/g,''),text:task.text,type:'SMS'}]};
  }else{
   const mail=config.microsoft365;
   if(!mail?.tenantId||!mail?.clientId||!mail?.clientSecret||!mail?.sender)throw new DeliveryError('Microsoft 365 발송 계정과 앱 권한 설정이 필요합니다.');
