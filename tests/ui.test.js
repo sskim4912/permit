@@ -248,11 +248,17 @@ test('header checkbox selects visible eligible records, supports mixed state, an
 });
 
 test('roster displays purpose, vehicle name, shoes and approval status; approval remains admin-only',async()=>{
- const {dom,d,login,calls}=await setup({own:true});try{
+ const {dom,d,login,calls,records}=await setup({own:true});try{
   const headers=[...d.querySelectorAll('.roster-table thead th')].map(x=>x.textContent.trim());assert.ok(headers.includes('방문목적'));assert.ok(headers.includes('가이수'));for(const key of ['gaisu_requested','gaisu_approved','final_approved'])assert.ok(d.querySelector('.roster-table thead [data-sort='+key+']'));assert.ok(headers.includes('안전화'));assert.ok(headers.includes('차명'));
-  assert.equal(d.querySelector('[data-record="one"] [data-label="방문목적"]').textContent,'회의');assert.equal(d.querySelector('[data-record="one"] [data-approval=final_approved]').checked,false);
+  assert.equal(d.querySelector('[data-record="one"] [data-label="방문목적"]').textContent,'회의');
+  records()[0].purpose='정기 설비 점검 및 안전 교육';
+  await d.querySelector('#refresh').onclick();
+  const purpose=d.querySelector('[data-record="one"] .purpose-preview');
+  assert.equal(purpose.textContent,'정기 설비 점검…');assert.equal(purpose.title,'정기 설비 점검 및 안전 교육');assert.equal(d.querySelector('[data-record="one"] [data-approval=final_approved]').checked,false);
   assert.equal(d.querySelector('#approve').hidden,true);await d.querySelector('#approve').onclick();assert.equal(calls.length,0);
   await login();d.querySelector('#reviewer').value='승인 담당자';d.querySelector('[data-select="one"]').click();await d.querySelector('#approve').onclick();assert.equal(calls[0].data.action,'approve');assert.equal(d.querySelector('[data-record="one"] [data-approval=final_approved]').checked,true);assert.match(d.querySelector('[data-record="one"] [data-label="최종 승인"]').textContent,/승인 담당자/);
+  const approved=d.querySelector('[data-record="one"] .final-approval-cell');
+  assert.equal(approved.querySelector('strong').textContent,'✓ 승인 담당자');
   const finalTime=d.querySelector('[data-record="one"] .final-approval-cell time');
   assert.equal(finalTime.textContent,'10/15 12:04');assert.match(finalTime.title,/12:04:05/);
   d.querySelector('[data-details="one"]').click();assert.match(d.querySelector('#recordDetails').textContent,/승인 담당자.*12:04:05/);

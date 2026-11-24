@@ -215,19 +215,20 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
 /* Phone roster: applicant summary above the three approval stages. */
 .roster-date-compact{display:none}
 .roster-table :is(.roster-date-full,.roster-date-compact,td[data-label="휴대전화번호"]){white-space:nowrap}
-.roster-table .final-approval-cell .approval-record{
- display:grid;
- grid-template-columns:auto minmax(0,max-content);
- justify-content:center;
- column-gap:4px;
- row-gap:1px;
+.roster-table .final-approval-cell .approval-record input:disabled{display:none}
+.roster-table .final-approval-cell .approval-record>span{
+ width:100%;
+ min-width:0;
+ gap:2px;
+ text-align:center;
 }
-.roster-table .final-approval-cell .approval-record>span{display:contents}
-.roster-table .final-approval-cell .approval-record input{width:14px;height:14px}
-.roster-table .final-approval-cell .approval-record input:disabled:not(:checked){display:none}
-.roster-table .final-approval-cell .approval-record input:disabled:not(:checked)+span small,
-.roster-table .final-approval-cell .approval-record time{grid-column:1/-1;white-space:nowrap}
-.roster-table .final-approval-cell .approval-record strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.roster-table .final-approval-cell .approval-record strong{
+ line-height:1.35;
+ word-break:keep-all;
+ overflow-wrap:anywhere;
+}
+.roster-table .final-approval-cell .approval-record time{white-space:nowrap}
+.approval-complete-mark{color:#117b61;font-size:1em}
 @media(max-width:720px){
  html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
  :root{font-size:14px}
