@@ -402,9 +402,10 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
  .record-overview>[data-field="차명"]{order:8}
  .record-overview>[data-field="점심신청"]{order:9}
  .record-overview>[data-field="안전화"]{order:10}
- .record-overview>[data-field="소속 회사"]{order:11;grid-column:1/-1}
+ .record-overview>[data-field="소속 회사"]{order:11}
  .record-overview>[data-field="최종 승인"]{display:none}
- .record-grid.record-overview .record-purpose{order:12;padding:6px 8px;border:0}
+ .record-grid.record-overview .record-purpose{order:12;grid-column:auto;padding:6px 8px;border:0}
+ .record-grid.record-overview:not(:has(>[data-field="소속 회사"])) .record-purpose{grid-column:1/-1}
  .record-approval-summary{
   display:grid;
   grid-template-columns:repeat(3,minmax(0,1fr));
