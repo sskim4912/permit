@@ -52,10 +52,26 @@ const consentChecks=['privacyCollection','privacyThirdParty'];
 function updateConsent(){
  $('privacyNotice').hidden=!!editing;
  $('privacyPolicyLink').hidden=!!editing;
- $('privacyCollectionLabel').hidden=!!editing;
+ const proxy=$('privacyStaffMode').checked;
+ $('privacyInputHelp').hidden=!proxy;
+ $('privacyCollectionLabel').textContent=proxy?'방문자의 수집·이용 동의를 확인했습니다':'개인정보 수집·이용에 동의합니다';
+ $('privacyThirdPartyLabel').textContent=proxy?'방문자의 씨텍 제공 동의를 확인했습니다':'씨텍 제3자 제공에 동의합니다';
  $('submit').disabled=busy||(!editing&&(!$('privacyCollection').checked||!$('privacyThirdParty').checked));
 }
 for(const id of consentChecks)$(id).addEventListener('change',updateConsent);
+for(const id of ['privacySelfMode','privacyStaffMode'])$(id).addEventListener('change',()=>{
+ for(const check of consentChecks)$(check).checked=false;
+ updateConsent();
+});
+for(const button of $('privacyNotice').querySelectorAll('.privacy-disclosure')){
+ button.addEventListener('click',()=>{
+  const panel=$(button.getAttribute('aria-controls'));
+  panel.hidden=!panel.hidden;
+  button.setAttribute('aria-expanded',String(!panel.hidden));
+  button.textContent=panel.hidden?'내용 보기':'내용 닫기';
+ });
+}
+
 function validate(){ $('formError').textContent='';if(!editing&&$('submit').disabled){$('formError').textContent='개인정보 동의와 대리 신청 확인을 완료해 주세요.';return false;}if(!editing&&(!$('authorName').value.trim()||$('authorName').value.trim().length>50))return fieldError($('authorName'),'작성자 이름을 50자 이내로 입력해 주세요.');$('requestForm').querySelectorAll('[aria-invalid]').forEach(input=>input.removeAttribute('aria-invalid'));
  for(const [index,box] of [...$('people').children].entries()){const prefix=`방문자 ${index+1}: `;for(const [key,label] of fields){const input=box.querySelector(`[name="${key}"]`);if(required.has(key)&&!input.value.trim())return fieldError(input,prefix+label+'을(를) 입력해 주세요.');}
  const birth=box.querySelector('[name="birth"]'),phone=box.querySelector('[name="phone"]');birth.value=formatBirth(birth.value);phone.value=formatPhone(phone.value);
@@ -197,7 +213,7 @@ $('requestForm').addEventListener('input',event=>{event.target.removeAttribute('
 $('requestForm').addEventListener('change',()=>{if(!editing){clearTimeout(timer);timer=setTimeout(saveDraft,350);}});
 window.addEventListener('pagehide',()=>{if(!editing)saveDraft();});
 $('add').onclick=()=>addPerson({company:$('people').querySelector('[name=company]')?.value.trim()||''},true);$('cancelEdit').onclick=()=>{closeEditor();render();};
-$('requestForm').onsubmit=async event=>{event.preventDefault();if(busy||!validate())return;clearTimeout(timer);if(!editing)saveDraft();busy=true;$('requestForm').querySelectorAll('input,select,button').forEach(input=>input.disabled=true);updateSelection();try{if(editing){const item=editing;await api(admin?'update':'owner-update',{...collect()[0],id:item.id,version:item.version,status:item.status,reviewer:actionActor([item])});selected.delete(item.id);closeEditor();toast('수정 내용을 저장했습니다.');}else{const items=collect();setWeekFor(items[0].visit_date);const submitted=await api('requests',{items,author_name:$('authorName').value.trim(),privacy_consent:{version:1,collection:true,seetec:true,proxy:$('privacyInputMode').value==='proxy'}});for(const id of consentChecks)$(id).checked=false;$('privacyInputMode').value='self';pendingNotificationIds=submitted.ids||[];pendingNotificationQueue=submitted.queue_id||'';notificationFinished=false;notificationFailures=0;notificationStartedAt=Date.now();notificationLastCheckedAt=0;try{sessionStorage.setItem('permit-pending-notifications',JSON.stringify({ids:pendingNotificationIds,queue_id:pendingNotificationQueue}));}catch(e){}try{sessionStorage.removeItem('permit-draft');}catch(e){}setPeople([]);$('draftStatus').textContent='신청 완료 · 새 방문자를 입력할 수 있습니다.';selected.clear();$('statusFilter').value='승인 대기';$('dateFilter').value='';$('search').value='';toast(items.length+'명 신청이 접수되었습니다.');const notifying=notifySubmitted();await notifying;}await refresh();}catch(e){$('formError').textContent=e.message;}finally{busy=false;$('requestForm').querySelectorAll('input,select,button').forEach(input=>input.disabled=false);updateConsent();updateSelection();}};
+$('requestForm').onsubmit=async event=>{event.preventDefault();if(busy||!validate())return;clearTimeout(timer);if(!editing)saveDraft();busy=true;$('requestForm').querySelectorAll('input,select,button').forEach(input=>input.disabled=true);updateSelection();try{if(editing){const item=editing;await api(admin?'update':'owner-update',{...collect()[0],id:item.id,version:item.version,status:item.status,reviewer:actionActor([item])});selected.delete(item.id);closeEditor();toast('수정 내용을 저장했습니다.');}else{const items=collect();setWeekFor(items[0].visit_date);const submitted=await api('requests',{items,author_name:$('authorName').value.trim(),privacy_consent:{version:1,collection:true,seetec:true,proxy:$('privacyStaffMode').checked}});for(const id of consentChecks)$(id).checked=false;$('privacySelfMode').checked=true;pendingNotificationIds=submitted.ids||[];pendingNotificationQueue=submitted.queue_id||'';notificationFinished=false;notificationFailures=0;notificationStartedAt=Date.now();notificationLastCheckedAt=0;try{sessionStorage.setItem('permit-pending-notifications',JSON.stringify({ids:pendingNotificationIds,queue_id:pendingNotificationQueue}));}catch(e){}try{sessionStorage.removeItem('permit-draft');}catch(e){}setPeople([]);$('draftStatus').textContent='신청 완료 · 새 방문자를 입력할 수 있습니다.';selected.clear();$('statusFilter').value='승인 대기';$('dateFilter').value='';$('search').value='';toast(items.length+'명 신청이 접수되었습니다.');const notifying=notifySubmitted();await notifying;}await refresh();}catch(e){$('formError').textContent=e.message;}finally{busy=false;$('requestForm').querySelectorAll('input,select,button').forEach(input=>input.disabled=false);updateConsent();updateSelection();}};
 $('list').addEventListener('change',async event=>{const approval=event.target.closest('[data-approval]');if(approval){await processApproval(approval);return;}const checkbox=event.target.closest('[data-select]');if(!checkbox)return;const row=rows.find(item=>item.id===checkbox.dataset.select);if(!row||!canEdit(row))return;if(checkbox.checked){if(selected.size>=selectionLimit()){checkbox.checked=false;toast('한 번에 '+selectionLimit()+'명까지 선택할 수 있습니다.');return;}selected.set(row.id,{...row});}else selected.delete(row.id);checkbox.closest('tr').classList.toggle('selected',checkbox.checked);updateSelection();});
 async function recordAction(event){const detail=event.target.closest('[data-details]');if(detail){const row=rows.find(r=>r.id===detail.dataset.details);if(row)openRecord(row);return;}const notification=event.target.closest('[data-notification]');if(notification){const row=rows.find(r=>r.id===notification.dataset.notification);if(row&&(admin||row.own))return notificationUI.open({request_id:row.id,label:(row.name||'신청')+' · '+visitPeriod(row)});return;}const remove=event.target.closest('[data-delete]');if(remove){const row=rows.find(row=>row.id===remove.dataset.delete);if(row&&canEdit(row))return requestDelete([row]);return;}const button=event.target.closest('[data-edit]');if(button){const item=rows.find(row=>row.id===button.dataset.edit);if(item)openEditor(item);}}
 $('list').onclick=recordAction;$('recordActions').onclick=recordAction;

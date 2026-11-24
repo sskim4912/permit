@@ -71,8 +71,24 @@ test('new submissions require two independent consents and offer a confirmed sta
   assert.equal(byId('submit').disabled,true);
   byId('privacyCollection').click();assert.equal(byId('submit').disabled,true);
   byId('privacyThirdParty').click();assert.equal(byId('submit').disabled,false);
-  assert.equal(byId('privacyInputMode').value,'self');
-  assert.match(byId('privacyInputMode').options[1].textContent,/현장 담당자.*동의 확인/);
+  assert.equal(byId('privacySelfMode').checked,true);
+  byId('privacyStaffMode').click();
+  assert.equal(byId('privacyCollection').checked,false);
+  assert.equal(byId('privacyThirdParty').checked,false);
+  assert.equal(byId('submit').disabled,true);
+  assert.equal(byId('privacyInputHelp').hidden,false);
+  assert.match(byId('privacyCollectionLabel').textContent,/방문자의.*확인했습니다/);
+  assert.match(byId('privacyThirdPartyLabel').textContent,/방문자의.*확인했습니다/);
+  const disclosure=d.querySelector('[aria-controls="privacyCollectionNotice"]');
+  disclosure.click();
+  assert.equal(byId('privacyCollectionNotice').hidden,false);
+  assert.equal(disclosure.getAttribute('aria-expanded'),'true');
+  byId('privacyCollection').click();
+  byId('privacyThirdParty').click();
+  assert.equal(byId('submit').disabled,false);
+  byId('privacySelfMode').click();
+  assert.equal(byId('submit').disabled,true);
+  assert.equal(byId('privacyInputHelp').hidden,true);
   assert.equal(byId('privacyPolicyLink').getAttribute('href'),'/privacy.html');
  }finally{dom.window.close();}
 });
