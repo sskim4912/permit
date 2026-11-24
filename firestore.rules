@@ -36,6 +36,11 @@ service cloud.firestore {
     function publicStamp(stamp) { return stamp == null ? null : {'by':maskName(stamp.by),'at':stamp.at}; }
     function rosterData(d) { return ('visit_end_date' in d) ? {'privacy_version':1,'visit_date':d.visit_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':maskName(d.reviewer),'version':d.version,'created':d.created,'name':maskName(d.name),'phone':maskLastFour(d.phone),'plate':maskLastFour(d.plate),'vehicle_type':d.vehicle_type,'vehicle_name':d.vehicle_name,'role':d.role,'shoes':d.shoes,'gate':d.gate,'lunch':d.get('lunch',''),'gaisu_requested':publicStamp(d.get('gaisu_requested',null)),'gaisu_approved':publicStamp(d.get('gaisu_approved',null)),'final_approved':publicStamp(d.get('final_approved',null)),'birth_mask':(d.birth.matches('^19.*')?'19**-**-**':d.birth.matches('^20.*')?'20**-**-**':'****-**-**'),'visit_end_date':d.visit_end_date} : {'privacy_version':1,'visit_date':d.visit_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':maskName(d.reviewer),'version':d.version,'created':d.created,'name':maskName(d.name),'phone':maskLastFour(d.phone),'plate':maskLastFour(d.plate),'vehicle_type':d.vehicle_type,'vehicle_name':d.vehicle_name,'role':d.role,'shoes':d.shoes,'gate':d.gate,'lunch':d.get('lunch',''),'gaisu_requested':publicStamp(d.get('gaisu_requested',null)),'gaisu_approved':publicStamp(d.get('gaisu_approved',null)),'final_approved':publicStamp(d.get('final_approved',null)),'birth_mask':(d.birth.matches('^19.*')?'19**-**-**':d.birth.matches('^20.*')?'20**-**-**':'****-**-**')}; }
     function matchesPublic(d,p) { return p == rosterData(d); }
+    // A public write separately verifies every projected field against the original.
+    function hasCurrentPublic(id, version) {
+      let projection = getAfter(/databases/$(database)/documents/publicRequests/$(id)).data;
+      return projection.privacy_version == 1 && projection.version == version;
+    }
     function validStamp(stamp) {
       return stamp is map && stamp.keys().hasAll(['by','at']) && stamp.keys().hasOnly(['by','at'])
         && stamp.by is string && stamp.by.size() > 0 && stamp.by.size() <= 50 && stamp.at is timestamp && stamp.at <= request.time;
@@ -81,7 +86,7 @@ service cloud.firestore {
         && request.resource.data.reviewer == ''
         && request.resource.data.version == 1
         && request.resource.data.created == request.time
-        && matchesPublic(request.resource.data,getAfter(/databases/$(database)/documents/publicRequests/$(id)).data);
+        && hasCurrentPublic(id,request.resource.data.version);
       allow update: if (isAdmin() || ownerStage(resource.data,request.resource.data) || ownerChange(resource.data,request.resource.data)) && valid(request.resource.data)
         && keepAuthor(resource.data,request.resource.data)
         && resource.data.get('privacy_consent',null) == request.resource.data.get('privacy_consent',null)
@@ -93,7 +98,7 @@ service cloud.firestore {
         && (isAdmin() ? request.resource.data.reviewer.size() > 0 : request.resource.data.modified_by.size() > 0)
         && request.resource.data.version == resource.data.version + 1
         && request.resource.data.created == resource.data.created
-        && matchesPublic(request.resource.data,getAfter(/databases/$(database)/documents/publicRequests/$(id)).data);
+        && hasCurrentPublic(id,request.resource.data.version);
       allow delete: if (isAdmin() || (pending(resource.data) && ('owner_key' in resource.data) && deletedLog(id,resource.data)))
         && !existsAfter(/databases/$(database)/documents/publicRequests/$(id));
     }
