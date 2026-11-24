@@ -115,7 +115,8 @@ test('multi-day periods persist privately and publicly, reject reversed dates an
 test('browser-owned applications enforce capability privacy, immutable authors, delivery locks and audited batch deletion',async()=>{
  const config={apiKey:'demo-key',projectId:project};const a=createPermitAPI({config,emulator:true,name:'owner-a',ownerKey:'a'.repeat(64)}),b=createPermitAPI({config,emulator:true,name:'owner-b',ownerKey:'b'.repeat(64)}),resumed=createPermitAPI({config,emulator:true,name:'owner-resumed',ownerKey:'a'.repeat(64)});
  try{
-  await assert.rejects(()=>a.api('requests',{items:[item]}),/이름/);
+  await assert.rejects(()=>a.api('requests',{items:[item]}),/동의/);
+  await assert.rejects(()=>a.api('requests',{privacy_consent:consent,items:[item]}),/이름/);
   await a.api('requests',{privacy_consent:consent,author_name:'최초 작성 담당',items:Array.from({length:10},(_,i)=>({...item,name:'본인검증'+i}))});
   let mine=(await a.api('requests')).filter(r=>r.own);assert.equal(mine.length,10);assert.ok(mine.every(r=>r.author_name==='최초 작성 담당'));
   assert.ok((await b.api('requests')).every(r=>!r.birth&&!r.owner_key&&!r.author_name));assert.equal((await resumed.api('requests')).filter(r=>r.own).length,10);
