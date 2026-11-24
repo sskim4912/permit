@@ -7,7 +7,7 @@ service cloud.firestore {
     function text(value) { return value is string && value.size() <= 200; }
     function valid(d) {
       return d.keys().hasAll(['visit_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team','status','reviewer','version','created'])
-        && d.keys().hasOnly(['visit_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team','status','reviewer','version','created','delivery_at','visit_end_date','author_name','owner_key','modified_by','modified_at','notification_queue_id','team_id','company','lunch','gaisu_requested','gaisu_approved','final_approved'])
+        && d.keys().hasOnly(['visit_date','purpose','gate','name','birth','phone','plate','vehicle_type','vehicle_name','role','shoes','team','status','reviewer','version','created','delivery_at','visit_end_date','author_name','owner_key','modified_by','modified_at','notification_queue_id','team_id','company','lunch','gaisu_requested','gaisu_approved','final_approved','privacy_consent'])
         && (!('delivery_at' in d) || (d.delivery_at is timestamp && d.delivery_at <= request.time))
         && ((!('author_name' in d) && !('owner_key' in d)) || (d.author_name is string && d.author_name.size() > 0 && d.author_name.size() <= 50 && d.owner_key is string && d.owner_key.matches('^[a-f0-9]{64}$')))
         && ((!('modified_by' in d) && !('modified_at' in d)) || (d.modified_by is string && d.modified_by.size() > 0 && d.modified_by.size() <= 50 && d.modified_at is timestamp && d.modified_at <= request.time))
@@ -31,12 +31,11 @@ service cloud.firestore {
         && (!('final_approved' in d) || d.status == '승인 완료')
         && d.version is int && d.created is timestamp;
     }
-    function publicData(d) {
-      return ('visit_end_date' in d) ? {'visit_date':d.visit_date,'visit_end_date':d.visit_end_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':d.reviewer,'version':d.version,'created':d.created} : {'visit_date':d.visit_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':d.reviewer,'version':d.version,'created':d.created};
-    }
-    function previousRosterData(d) { return ('visit_end_date' in d) ? {'visit_date':d.visit_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':d.reviewer,'version':d.version,'created':d.created,'name':d.name,'phone':d.phone,'plate':d.plate,'vehicle_type':d.vehicle_type,'vehicle_name':d.vehicle_name,'role':d.role,'shoes':d.shoes,'gate':d.gate,'birth_mask':(d.birth.matches('^19.*')?'19**-**-**':d.birth.matches('^20.*')?'20**-**-**':'****-**-**'),'visit_end_date':d.visit_end_date} : {'visit_date':d.visit_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':d.reviewer,'version':d.version,'created':d.created,'name':d.name,'phone':d.phone,'plate':d.plate,'vehicle_type':d.vehicle_type,'vehicle_name':d.vehicle_name,'role':d.role,'shoes':d.shoes,'gate':d.gate,'birth_mask':(d.birth.matches('^19.*')?'19**-**-**':d.birth.matches('^20.*')?'20**-**-**':'****-**-**')}; }
-    function rosterData(d) { return ('visit_end_date' in d) ? {'visit_date':d.visit_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':d.reviewer,'version':d.version,'created':d.created,'name':d.name,'phone':d.phone,'plate':d.plate,'vehicle_type':d.vehicle_type,'vehicle_name':d.vehicle_name,'role':d.role,'shoes':d.shoes,'gate':d.gate,'lunch':d.get('lunch',''),'gaisu_requested':d.get('gaisu_requested',null),'gaisu_approved':d.get('gaisu_approved',null),'final_approved':d.get('final_approved',null),'birth_mask':(d.birth.matches('^19.*')?'19**-**-**':d.birth.matches('^20.*')?'20**-**-**':'****-**-**'),'visit_end_date':d.visit_end_date} : {'visit_date':d.visit_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':d.reviewer,'version':d.version,'created':d.created,'name':d.name,'phone':d.phone,'plate':d.plate,'vehicle_type':d.vehicle_type,'vehicle_name':d.vehicle_name,'role':d.role,'shoes':d.shoes,'gate':d.gate,'lunch':d.get('lunch',''),'gaisu_requested':d.get('gaisu_requested',null),'gaisu_approved':d.get('gaisu_approved',null),'final_approved':d.get('final_approved',null),'birth_mask':(d.birth.matches('^19.*')?'19**-**-**':d.birth.matches('^20.*')?'20**-**-**':'****-**-**')}; }
-    function matchesPublic(d,p) { return ('lunch' in p) ? p == rosterData(d) : ('birth_mask' in p) ? p == previousRosterData(d) : p == publicData(d); }
+    function maskName(value) { return value.replace('(?s).$', '*'); }
+    function maskLastFour(value) { return value.replace('(?s).{1,4}$', '****'); }
+    function publicStamp(stamp) { return stamp == null ? null : {'by':maskName(stamp.by),'at':stamp.at}; }
+    function rosterData(d) { return ('visit_end_date' in d) ? {'privacy_version':1,'visit_date':d.visit_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':maskName(d.reviewer),'version':d.version,'created':d.created,'name':maskName(d.name),'phone':maskLastFour(d.phone),'plate':maskLastFour(d.plate),'vehicle_type':d.vehicle_type,'vehicle_name':d.vehicle_name,'role':d.role,'shoes':d.shoes,'gate':d.gate,'lunch':d.get('lunch',''),'gaisu_requested':publicStamp(d.get('gaisu_requested',null)),'gaisu_approved':publicStamp(d.get('gaisu_approved',null)),'final_approved':publicStamp(d.get('final_approved',null)),'birth_mask':(d.birth.matches('^19.*')?'19**-**-**':d.birth.matches('^20.*')?'20**-**-**':'****-**-**'),'visit_end_date':d.visit_end_date} : {'privacy_version':1,'visit_date':d.visit_date,'purpose':d.purpose,'team':d.team,'status':d.status,'reviewer':maskName(d.reviewer),'version':d.version,'created':d.created,'name':maskName(d.name),'phone':maskLastFour(d.phone),'plate':maskLastFour(d.plate),'vehicle_type':d.vehicle_type,'vehicle_name':d.vehicle_name,'role':d.role,'shoes':d.shoes,'gate':d.gate,'lunch':d.get('lunch',''),'gaisu_requested':publicStamp(d.get('gaisu_requested',null)),'gaisu_approved':publicStamp(d.get('gaisu_approved',null)),'final_approved':publicStamp(d.get('final_approved',null)),'birth_mask':(d.birth.matches('^19.*')?'19**-**-**':d.birth.matches('^20.*')?'20**-**-**':'****-**-**')}; }
+    function matchesPublic(d,p) { return p == rosterData(d); }
     function validStamp(stamp) {
       return stamp is map && stamp.keys().hasAll(['by','at']) && stamp.keys().hasOnly(['by','at'])
         && stamp.by is string && stamp.by.size() > 0 && stamp.by.size() <= 50 && stamp.at is timestamp && stamp.at <= request.time;
@@ -73,6 +72,8 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create: if valid(request.resource.data)
         && ('company' in request.resource.data)
+        && request.resource.data.privacy_consent == {'version':1,'collection':true,'seetec':true,'proxy':request.resource.data.privacy_consent.proxy}
+        && request.resource.data.privacy_consent.proxy is bool
         && !request.resource.data.keys().hasAny(['gaisu_requested','gaisu_approved','final_approved'])
         && request.resource.data.status in ['승인 대기','현장 제출']
         && !('delivery_at' in request.resource.data)
@@ -83,6 +84,7 @@ service cloud.firestore {
         && matchesPublic(request.resource.data,getAfter(/databases/$(database)/documents/publicRequests/$(id)).data);
       allow update: if (isAdmin() || ownerStage(resource.data,request.resource.data) || ownerChange(resource.data,request.resource.data)) && valid(request.resource.data)
         && keepAuthor(resource.data,request.resource.data)
+        && resource.data.get('privacy_consent',null) == request.resource.data.get('privacy_consent',null)
         && (!('notification_queue_id' in resource.data) || request.resource.data.notification_queue_id==resource.data.notification_queue_id)
         && keepStages(resource.data,request.resource.data)
         && (!('visit_end_date' in resource.data) || ('visit_end_date' in request.resource.data))
@@ -96,8 +98,7 @@ service cloud.firestore {
         && !existsAfter(/databases/$(database)/documents/publicRequests/$(id));
     }
     match /publicRequests/{id} {
-      // 공개 명단에는 요청된 방문정보와 마스킹된 생년월일만 저장하며 원본 생년월일·소유 키는 제외한다.
-      allow read: if true;
+      allow read: if isAdmin() || resource.data.privacy_version == 1;
       allow create: if matchesPublic(getAfter(/databases/$(database)/documents/requests/$(id)).data,request.resource.data)
         && getAfter(/databases/$(database)/documents/requests/$(id)).data.created == request.time;
       allow update: if matchesPublic(getAfter(/databases/$(database)/documents/requests/$(id)).data,request.resource.data);
@@ -125,9 +126,13 @@ service cloud.firestore {
     }
     function contact(c) { return c is map && c.keys().hasAll(['name','phone','email']) && c.keys().hasOnly(['name','phone','email']) && c.name is string && c.name.size()>0 && c.name.size()<=50 && c.phone is string && c.phone.matches('^01[016789]-[0-9]{3,4}-[0-9]{4}$') && c.email is string && c.email.size()<=254 && c.email.matches('^[^\\s@<>;,]+@[^\\s@<>;,]+[.][^\\s@<>;,]+$'); }
     match /contactTeams/{id} {
-      allow read: if true;
+      allow read: if isAdmin();
       allow create, update: if isAdmin() && id.matches('^[a-zA-Z0-9_-]{1,60}$') && request.resource.data.keys().hasAll(['name','order','contacts']) && request.resource.data.keys().hasOnly(['name','order','contacts']) && request.resource.data.name is string && request.resource.data.name.size()>0 && request.resource.data.name.size()<=50 && request.resource.data.order is int && request.resource.data.order>=0 && request.resource.data.order<30 && request.resource.data.contacts is list && request.resource.data.contacts.size()==2 && contact(request.resource.data.contacts[0]) && contact(request.resource.data.contacts[1]);
       allow delete: if isAdmin();
+    }
+    match /publicContactTeams/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
     }
     match /settings/contactDirectory {
       allow read: if true;

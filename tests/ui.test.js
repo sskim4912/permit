@@ -14,7 +14,7 @@ const base={company:'검증회사',visit_date:'2026-10-15',purpose:'회의',team
 async function setup({draft=null,blocked=false,own=false,defaultCompany=true}={}){
  const dom=new JSDOM(readFileSync('public/index.html','utf8'),{url:'https://permit.example',runScripts:'outside-only',pretendToBeVisual:true}),w=dom.window,d=w.document;
  w.eval(readFileSync('src/notification-ui.js','utf8').replace('export function createNotificationUI','function createNotificationUI'));
- w.structuredClone=structuredClone;w.defaultTeams=defaultTeams;w.teamLabel=teamLabel;w.validateTeams=validateTeams;w.eval(readFileSync('src/directory-ui.js','utf8').replace(/import .*?;\n/,'').replace('export function createDirectoryUI','function createDirectoryUI').replace('export {defaultTeams,teamLabel};',''));
+ w.structuredClone=structuredClone;w.defaultTeams=defaultTeams;w.teamLabel=teamLabel;w.validateTeams=validateTeams;w.eval(readFileSync('src/directory-ui.js','utf8').replace(/^import .*?;\n/gm,'').replace('export function createDirectoryUI','function createDirectoryUI').replace('export {defaultTeams,teamLabel};',''));
  const NativeDate=w.Date;w.Date=class extends NativeDate{constructor(...args){super(...(args.length?args:['2026-10-15T03:00:00Z']));}};
  let notificationClock=Date.now();const intervals=[];w.Date.now=()=>notificationClock;
  w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};w.confirm=()=>true;w.setInterval=(fn,ms)=>{intervals.push({fn,ms});return 0;};
@@ -53,11 +53,28 @@ async function setup({draft=null,blocked=false,own=false,defaultCompany=true}={}
  const enter=(key,value,index=0)=>{const input=d.querySelectorAll(`[name="${key}"]`)[index];input.value=key==='team'&&!defaultTeams.some(t=>t.name===value)?'관리팀':value;input.dispatchEvent(new w.Event('input',{bubbles:true}));return input;};
  const login=async()=>{await d.querySelector('#login').onclick();d.querySelector('#password').value='test-password';await d.querySelector('#loginForm').onsubmit({preventDefault(){}});await tick();};
  const change=(id,value)=>{d.querySelector('#'+id).value=value;d.querySelector('#'+id).dispatchEvent(new w.Event('change',{bubbles:true}));};
- const submit=()=>d.querySelector('#requestForm').onsubmit({preventDefault(){}});
+ const submit=()=>{
+  for(const id of ['privacyCollection','privacyThirdParty']){
+   const input=d.getElementById(id);
+   if(!input.checked)input.click();
+  }
+  return d.querySelector('#requestForm').onsubmit({preventDefault(){}});
+ };
  return {dom,w,d,calls,enter,login,change,submit,advanceNotificationClock:ms=>{notificationClock+=ms;},runNotificationPoll:async()=>{intervals.find(i=>i.ms===5000)?.fn();await tick();},getBlob:()=>blob,records:()=>records,notifications,setNotifyResult:value=>{notifyResult=value;},setRequestNotifyResult:(id,value)=>{requestNotificationResults[id]=value;},setNotifyHook:value=>{notifyHook=value;}};
 }
 test('one screen and two statuses; public names are visible while original birth and privileged controls are hidden',async()=>{
- const {dom,d}=await setup();try{assert.equal(d.querySelector('#requestPanel').hidden,false);assert.equal(d.querySelector('#adminControls').hidden,true);assert.equal(d.querySelector('#adminSettings').hidden,true);assert.equal(d.querySelectorAll('[data-select]').length,0);assert.equal(d.querySelectorAll('[data-edit]').length,0);assert.ok(d.querySelector('#list').textContent.includes('가상방문자'));assert.ok(!d.querySelector('#list').textContent.includes('1990-01-23'));assert.deepEqual([...d.querySelector('#statusFilter').options].map(option=>option.textContent),['전체','승인 대기','승인 완료']);assert.ok(!d.querySelector('#list').textContent.includes('현장 제출'));}finally{dom.window.close();}
+ const {dom,d}=await setup();try{assert.equal(d.querySelector('#requestPanel').hidden,false);assert.equal(d.querySelector('#adminControls').hidden,true);assert.equal(d.querySelector('#adminSettings').hidden,true);assert.equal(d.querySelectorAll('[data-select]').length,0);assert.equal(d.querySelectorAll('[data-edit]').length,0);assert.ok(d.querySelector('#list').textContent.includes('가상방문*'));assert.ok(!d.querySelector('#list').textContent.includes('1990-01-23'));assert.deepEqual([...d.querySelector('#statusFilter').options].map(option=>option.textContent),['전체','승인 대기','승인 완료']);assert.ok(!d.querySelector('#list').textContent.includes('현장 제출'));}finally{dom.window.close();}
+});
+test('new submissions require two independent consents and confirmation for proxy applications',async()=>{
+ const {dom,d}=await setup();try{
+  const byId=id=>d.getElementById(id);
+  assert.equal(byId('submit').disabled,true);
+  byId('privacyCollection').click();assert.equal(byId('submit').disabled,true);
+  byId('privacyThirdParty').click();assert.equal(byId('submit').disabled,false);
+  byId('privacyProxy').click();assert.equal(byId('submit').disabled,true);
+  byId('privacyProxyConfirmed').click();assert.equal(byId('submit').disabled,false);
+  assert.equal(byId('privacyPolicyLink').getAttribute('href'),'/privacy.html');
+ }finally{dom.window.close();}
 });
 test('numeric input autoformats, auto-saves and submits without manual draft commands',async()=>{
  const {dom,w,d,enter,calls,submit}=await setup();try{enter('purpose','테스트');enter('team','테스트팀');enter('name','가상방문자');assert.equal(enter('birth','19900123').value,'1990-01-23');assert.equal(enter('phone','01000000000').value,'010-0000-0000');await tick();assert.equal(JSON.parse(w.sessionStorage.getItem('permit-draft'))[0].birth,'1990-01-23');assert.match(d.querySelector('#draftStatus').textContent,/자동 임시저장됨/);await submit();assert.equal(calls[0].data.items[0].phone,'010-0000-0000');assert.equal(w.sessionStorage.getItem('permit-draft'),null);assert.equal(d.querySelector('[name="name"]').value,'');assert.match(d.querySelector('#list').textContent,/미처리/);}finally{dom.window.close();}
@@ -209,7 +226,7 @@ test('applicant can edit after administrator corrects visitor name without chang
 test('weekly unified roster keeps fifteen columns, masks others and preserves full administrator view',async()=>{
  const {dom,d,login,records}=await setup({own:true});try{
   assert.equal(d.querySelectorAll('.roster-table thead th:not([colspan])').length,15);assert.equal(d.querySelectorAll('[data-record]').length,3);assert.match(d.querySelector('#weekLabel').textContent,/2026-10-12 ~ 2026-10-18/);
-  const other=d.querySelector('[data-record="two"]');assert.match(other.textContent,/19\*\*-\*\*-\*\*/);assert.ok(other.textContent.includes('010-0000-0000'));assert.ok(!other.textContent.includes('1990-01-23'));assert.match(d.querySelector('[data-record="one"]').textContent,/010-0000-0000/);
+  const other=d.querySelector('[data-record="two"]');assert.match(other.textContent,/19\*\*-\*\*-\*\*/);assert.ok(other.textContent.includes('010-0000-****'));assert.ok(!other.textContent.includes('1990-01-23'));assert.match(d.querySelector('[data-record="one"]').textContent,/010-0000-0000/);
   records().push({...base,id:'spanning',visit_date:'2026-10-18',visit_end_date:'2026-10-20',status:'승인 대기'});await d.querySelector('#refresh').onclick();assert.ok(d.querySelector('[data-record="spanning"]'));
   d.querySelector('#weekNext').click();assert.ok(d.querySelector('[data-record="spanning"]'));assert.equal(d.querySelector('[data-record="one"]'),null);
   d.querySelector('#weekCurrent').click();await login();assert.ok(d.querySelector('[data-record="two"]').textContent.includes('1990-01-23'));assert.equal(d.querySelectorAll('.roster-table thead th:not([colspan])').length,15);

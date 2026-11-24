@@ -1,3 +1,5 @@
+import {defaultTeams} from '../functions/lib/directory.js';
+import {maskName,maskLastFour} from '../src/privacy-mask.js';
 import {createNotifyHandler} from '../functions/lib/http.js';
 import {getFirestore as getAdminFirestore,Timestamp as AdminTimestamp} from 'firebase-admin/firestore';
 import {test, before, after} from 'node:test';
@@ -14,6 +16,7 @@ let env,service,outsider,adminApp;
 const project='demo-permit';
 const item={company:'검증회사',visit_date:'2026-10-15',purpose:'회의',team:'안전팀',gate:'서문',name:'테스트 방문자',birth:'1990-01-01',phone:'010-0000-0000',plate:'',vehicle_type:'',vehicle_name:'',role:'도보',shoes:'필요없음'};
 const pub=publicRoster;
+const consent={version:1,collection:true,seetec:true,proxy:false};
 before(async()=>{
  env=await initializeTestEnvironment({projectId:project,firestore:{host:'127.0.0.1',port:8080,rules:readFileSync('firestore.rules','utf8')}});
  process.env.FIREBASE_AUTH_EMULATOR_HOST='127.0.0.1:9099';
@@ -25,10 +28,10 @@ after(async()=>{await env?.cleanup();if(service)await deleteApp(service.app);if(
 test('anonymous batch submission, privacy, administrator login, settings and edit lifecycle',async()=>{
  const api=service.api;
  assert.equal((await api('session')).reviewer,false);
- await assert.rejects(()=>api('requests',{author_name:'검증 작성자',items:[item,{...item,birth:'2026-02-30'}]}));
+ await assert.rejects(()=>api('requests',{privacy_consent:consent,author_name:'검증 작성자',items:[item,{...item,birth:'2026-02-30'}]}));
  assert.equal((await api('requests')).length,0);
- assert.equal((await api('requests',{author_name:'검증 작성자',items:Array.from({length:10},()=>item)})).count,10);
- let rows=await outsider.api('requests');assert.equal(rows.length,10);assert.equal(rows[0].name,item.name);assert.equal(rows[0].phone,item.phone);assert.equal(rows[0].birth,undefined);assert.equal(rows[0].birth_mask,'19**-**-**');assert.equal(rows[0].owner_key,undefined);
+ assert.equal((await api('requests',{privacy_consent:consent,author_name:'검증 작성자',items:Array.from({length:10},()=>item)})).count,10);
+ let rows=await outsider.api('requests');assert.equal(rows.length,10);assert.equal(rows[0].name,maskName(item.name));assert.equal(rows[0].phone,maskLastFour(item.phone));assert.equal(rows[0].birth,undefined);assert.equal(rows[0].birth_mask,'19**-**-**');assert.equal(rows[0].owner_key,undefined);
  await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(),'requests',rows[0].id)));
  await assert.rejects(()=>api('update',{id:rows[0].id,version:1,reviewer:'담당자'}));
  await assert.rejects(()=>api('login',{password:'wrong'}));
@@ -50,9 +53,10 @@ test('rules reject non-admin access, forged public summaries and invalid submiss
  await assertFails(deleteDoc(doc(publicDb,'requests',id)));
  await assertFails(setDoc(doc(publicDb,'publicRequests','forged'),{...pub({...item,status:'승인 완료',reviewer:'',version:1,created:serverTimestamp()})}));
  async function submit(name,overrides={},summaryOverrides={}){
-  const batch=writeBatch(publicDb),record={...item,status:'현장 제출',reviewer:'',version:1,created:serverTimestamp(),...overrides};
+  const batch=writeBatch(publicDb),record={...item,privacy_consent:consent,status:'현장 제출',reviewer:'',version:1,created:serverTimestamp(),...overrides};
   batch.set(doc(publicDb,'requests',name),record);batch.set(doc(publicDb,'publicRequests',name),{...pub(record),...summaryOverrides});return batch.commit();
  }
+ await assertFails(submit('missing-consent',{privacy_consent:{...consent,seetec:false}}));
  await assertFails(submit('forged-status',{status:'승인 완료'}));
  await assertFails(submit('invalid-shoes',{shoes:'999'}));
  await assertFails(submit('extra-field',{secret:'not allowed'}));
@@ -68,7 +72,7 @@ test('bulk delivery, approval and deletion enforce admin rights, preserve data a
  const api=service.api;
  await api('logout',{});
  await assert.rejects(()=>api('bulk',{action:'approve',items:[{id:'missing',version:1}],reviewer:'담당자'}),/관리자/);
- await api('requests',{author_name:'검증 작성자',items:Array.from({length:10},(_,i)=>({...item,name:'일괄검증'+i,team:i%2?'안전팀':'공무팀',visit_date:i%2?'2026-10-16':'2026-10-15'}))});
+ await api('requests',{privacy_consent:consent,author_name:'검증 작성자',items:Array.from({length:10},(_,i)=>({...item,name:'일괄검증'+i,team:i%2?'안전팀':'공무팀',visit_date:i%2?'2026-10-16':'2026-10-15'}))});
  await api('login',{password:'test-only-password'});
  let targets=(await api('requests')).filter(row=>row.name.startsWith('일괄검증'));
  assert.equal(targets.length,10);assert.ok(targets.every(row=>row.status==='승인 대기'));
@@ -96,9 +100,9 @@ test('bulk delivery, approval and deletion enforce admin rights, preserve data a
 
 test('multi-day periods persist privately and publicly, reject reversed dates and preserve legacy records',async()=>{
  const api=service.api;await api('logout',{});
- await assert.rejects(()=>api('requests',{author_name:'검증 작성자',items:[{...item,visit_end_date:'2026-10-14'}]}),/방문종료일/);
- await assert.rejects(()=>api('requests',{author_name:'검증 작성자',items:[{...item,visit_end_date:'2026-02-30'}]}),/날짜/);
- await api('requests',{author_name:'검증 작성자',items:[{...item,name:'기간검증',visit_end_date:'2026-10-20'}]});
+ await assert.rejects(()=>api('requests',{privacy_consent:consent,author_name:'검증 작성자',items:[{...item,visit_end_date:'2026-10-14'}]}),/방문종료일/);
+ await assert.rejects(()=>api('requests',{privacy_consent:consent,author_name:'검증 작성자',items:[{...item,visit_end_date:'2026-02-30'}]}),/날짜/);
+ await api('requests',{privacy_consent:consent,author_name:'검증 작성자',items:[{...item,name:'기간검증',visit_end_date:'2026-10-20'}]});
  let publicRows=await outsider.api('requests');assert.ok(publicRows.some(r=>r.visit_end_date==='2026-10-20'));assert.ok(publicRows.every(r=>!r.birth&&!r.owner_key));
  await api('login',{password:'test-only-password'});let row=(await api('requests')).find(r=>r.name==='기간검증');assert.equal(row.visit_end_date,'2026-10-20');
  await api('update',{...row,visit_end_date:'2026-10-22',reviewer:'기간담당자'});row=(await api('requests')).find(r=>r.id===row.id);assert.equal(row.visit_end_date,'2026-10-22');
@@ -112,7 +116,7 @@ test('browser-owned applications enforce capability privacy, immutable authors, 
  const config={apiKey:'demo-key',projectId:project};const a=createPermitAPI({config,emulator:true,name:'owner-a',ownerKey:'a'.repeat(64)}),b=createPermitAPI({config,emulator:true,name:'owner-b',ownerKey:'b'.repeat(64)}),resumed=createPermitAPI({config,emulator:true,name:'owner-resumed',ownerKey:'a'.repeat(64)});
  try{
   await assert.rejects(()=>a.api('requests',{items:[item]}),/이름/);
-  await a.api('requests',{author_name:'최초 작성 담당',items:Array.from({length:10},(_,i)=>({...item,name:'본인검증'+i}))});
+  await a.api('requests',{privacy_consent:consent,author_name:'최초 작성 담당',items:Array.from({length:10},(_,i)=>({...item,name:'본인검증'+i}))});
   let mine=(await a.api('requests')).filter(r=>r.own);assert.equal(mine.length,10);assert.ok(mine.every(r=>r.author_name==='최초 작성 담당'));
   assert.ok((await b.api('requests')).every(r=>!r.birth&&!r.owner_key&&!r.author_name));assert.equal((await resumed.api('requests')).filter(r=>r.own).length,10);
   const first=mine[0];await assert.rejects(()=>b.api('owner-update',{...first,reviewer:'다른 사람'}),/찾을 수/);await assert.rejects(()=>b.api('owner-delete',{items:[first],reviewer:'다른 사람'}),/변경/);
@@ -156,7 +160,7 @@ test('admin saves multiple mail recipients with existing string schema and rules
 test('browser-owned batch deletion derives each original author without a second name entry',async()=>{
  const client=createPermitAPI({config:{apiKey:'demo-key',projectId:project},emulator:true,name:'multi-author-delete',ownerKey:'c'.repeat(64)});
  try{
-  await client.api('requests',{author_name:'신청자 하나',items:[{...item,name:'작성자별 삭제1'}]});await client.api('requests',{author_name:'신청자 둘',items:[{...item,name:'작성자별 삭제2'}]});
+  await client.api('requests',{privacy_consent:consent,author_name:'신청자 하나',items:[{...item,name:'작성자별 삭제1'}]});await client.api('requests',{privacy_consent:consent,author_name:'신청자 둘',items:[{...item,name:'작성자별 삭제2'}]});
   const mine=(await client.api('requests')).filter(r=>r.own);assert.equal(mine.length,2);
   await client.api('owner-delete',{items:mine.map(({id,version})=>({id,version}))});
   assert.equal((await client.api('requests')).filter(r=>r.own).length,0);
@@ -167,14 +171,14 @@ test('browser-owned batch deletion derives each original author without a second
 test('public roster masks birth on server and administrator safely upgrades legacy summaries',async()=>{
  const config={apiKey:'demo-key',projectId:project},owner=createPermitAPI({config,emulator:true,name:'projection-owner',ownerKey:'d'.repeat(64)});
  try{
-  await owner.api('requests',{author_name:'공개검증 작성자',items:[{...item,name:'공개검증',phone:'010-0000-1234',plate:'테스트0001',birth:'2001-02-03'}]});
+  await owner.api('requests',{privacy_consent:consent,author_name:'공개검증 작성자',items:[{...item,name:'공개검증',phone:'010-0000-1234',plate:'테스트0001',birth:'2001-02-03'}]});
   let mine=(await owner.api('requests')).find(r=>r.own);assert.equal(mine.birth,'2001-02-03');
-  let pubRow=(await outsider.api('requests')).find(r=>r.id===mine.id);assert.equal(pubRow.birth_mask,'20**-**-**');assert.equal(pubRow.birth,undefined);assert.equal(pubRow.name,'공개검증');assert.equal(pubRow.phone,'010-0000-1234');assert.equal(pubRow.owner_key,undefined);
+  let pubRow=(await outsider.api('requests')).find(r=>r.id===mine.id);assert.equal(pubRow.birth_mask,'20**-**-**');assert.equal(pubRow.birth,undefined);assert.equal(pubRow.name,'공개검*');assert.equal(pubRow.phone,'010-0000-****');assert.equal(pubRow.owner_key,undefined);
   const adminDb=env.authenticatedContext(ADMIN_UID).firestore(),ref=doc(adminDb,'publicRequests',mine.id),original=(await getDoc(doc(adminDb,'requests',mine.id))).data();
   await assertFails(setDoc(ref,{...pub(original),birth:original.birth}));await assertFails(setDoc(ref,{...pub(original),birth_mask:original.birth}));await assertFails(setDoc(ref,{...pub(original),owner_key:original.owner_key}));
   const legacy=Object.fromEntries(['visit_date','visit_end_date','purpose','team','status','reviewer','version','created'].filter(k=>k in original).map(k=>[k,original[k]]));
-  await setDoc(ref,legacy);await service.api('login',{password:'test-only-password'});await service.api('requests');await service.api('requests');
-  pubRow=(await outsider.api('requests')).find(r=>r.id===mine.id);assert.equal(pubRow.name,'공개검증');assert.equal(pubRow.birth_mask,'20**-**-**');
+  await env.withSecurityRulesDisabled(context=>setDoc(doc(context.firestore(),'publicRequests',mine.id),legacy));await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(),'publicRequests',mine.id)));await service.api('login',{password:'test-only-password'});await service.api('requests');await service.api('requests');
+  pubRow=(await outsider.api('requests')).find(r=>r.id===mine.id);assert.equal(pubRow.name,'공개검*');assert.equal(pubRow.birth_mask,'20**-**-**');
   const after=(await getDoc(doc(adminDb,'requests',mine.id))).data();assert.equal(after.birth,original.birth);assert.equal(after.version,original.version);assert.equal(after.owner_key,original.owner_key);await service.api('logout',{});
  }finally{await deleteApp(owner.app);}
 });
@@ -182,8 +186,8 @@ test('public roster masks birth on server and administrator safely upgrades lega
 test('lunch and approval stages enforce owner/admin rights, server audit times, conflict checks and immutable history',async()=>{
  const config={apiKey:'demo-key',projectId:project};const owner=createPermitAPI({config,emulator:true,name:'stage-owner',ownerKey:'e'.repeat(64)}),stranger=createPermitAPI({config,emulator:true,name:'stage-stranger',ownerKey:'f'.repeat(64)});
  try{
-  await assert.rejects(()=>owner.api('requests',{author_name:'단계 신청자',items:[{...item,lunch:'잘못된 선택'}]}),/중식/);
-  await owner.api('requests',{author_name:'단계 신청자',items:[{...item,name:'단계 검증',lunch:'중식신청'}]});let mine=(await owner.api('requests')).find(r=>r.own);assert.equal(mine.lunch,'중식신청');
+  await assert.rejects(()=>owner.api('requests',{privacy_consent:consent,author_name:'단계 신청자',items:[{...item,lunch:'잘못된 선택'}]}),/중식/);
+  await owner.api('requests',{privacy_consent:consent,author_name:'단계 신청자',items:[{...item,name:'단계 검증',lunch:'중식신청'}]});let mine=(await owner.api('requests')).find(r=>r.own);assert.equal(mine.lunch,'중식신청');
   await assert.rejects(()=>stranger.api('approval',{id:mine.id,version:mine.version,stage:'gaisu_requested'}),/본인/);
   await assert.rejects(()=>owner.api('approval',{id:mine.id,version:mine.version,stage:'final_approved'}),/관리자/);
   await owner.api('approval',{id:mine.id,version:mine.version,stage:'gaisu_requested',reviewer:'무시할 이름',at:'2000-01-01'});let changed=(await owner.api('requests')).find(r=>r.id===mine.id);assert.equal(changed.gaisu_requested.by,'단계 신청자');assert.ok(changed.gaisu_requested.at);assert.notEqual(changed.gaisu_requested.at,'2000-01-01');
@@ -198,7 +202,7 @@ test('lunch and approval stages enforce owner/admin rights, server audit times, 
   await owner.api('approval',{id:changed.id,version:changed.version,stage:'gaisu_approved'});changed=(await owner.api('requests')).find(r=>r.id===mine.id);assert.equal(changed.gaisu_approved.by,'단계 신청자');
   await assert.rejects(()=>service.api('approval',{id:changed.id,version:changed.version,stage:'final_approved',reviewer:''}),/이름/);
   await service.api('approval',{id:changed.id,version:changed.version,stage:'final_approved',reviewer:'최종 담당자'});changed=(await owner.api('requests')).find(r=>r.id===mine.id);assert.equal(changed.status,'승인 완료');assert.equal(changed.final_approved.by,'최종 담당자');assert.ok(changed.final_approved.at);
-  const publicRow=(await stranger.api('requests')).find(r=>r.id===mine.id);assert.equal(publicRow.final_approved.by,'최종 담당자');assert.equal(publicRow.lunch,'미신청');assert.equal(publicRow.owner_key,undefined);assert.equal(publicRow.birth,undefined);
+  const publicRow=(await stranger.api('requests')).find(r=>r.id===mine.id);assert.equal(publicRow.final_approved.by,'최종 담당*');assert.equal(publicRow.lunch,'미신청');assert.equal(publicRow.owner_key,undefined);assert.equal(publicRow.birth,undefined);
   original=(await getDoc(doc(adminDb,'requests',mine.id))).data();await assertFails(forge({final_approved:{by:'위조',at:serverTimestamp()}}));
   await service.api('logout',{});
  }finally{await deleteApp(owner.app);await deleteApp(stranger.app);}
@@ -209,11 +213,11 @@ test('team directory is public, admin-managed, versioned and validates both cont
  await assert.rejects(()=>outsider.api('directory',{teams:defaults.teams,version:0}),/관리자/);
  const publicDb=env.unauthenticatedContext().firestore();await assertFails(setDoc(doc(publicDb,'contactTeams','forged'),{name:'위조',order:0,contacts:defaults.teams[0].contacts}));
  await assertFails(getDoc(doc(publicDb,'notificationJobs','private-job')));await assertFails(setDoc(doc(publicDb,'notificationClaims','forged'),{job:'forged'}));
- await service.api('login',{password:'test-only-password'});const teams=structuredClone(defaults.teams);teams[0].contacts[0].name='변경 담당자';
- const saved=await service.api('directory',{teams,version:0});assert.equal(saved.version,1);assert.equal((await outsider.api('directory')).teams[0].contacts[0].name,'변경 담당자');
+ await service.api('login',{password:'test-only-password'});const teams=structuredClone(defaultTeams);teams[0].contacts[0].name='변경 담당자';
+ const saved=await service.api('directory',{teams,version:0});assert.equal(saved.version,1);await assertFails(getDoc(doc(publicDb,'contactTeams',teams[0].id)));assert.equal((await outsider.api('directory')).teams[0].contacts[0].name,'변경 담당*');
  await assert.rejects(()=>service.api('directory',{teams,version:0}),/변경/);
  const adminDb=env.authenticatedContext(ADMIN_UID).firestore();await assertFails(setDoc(doc(adminDb,'contactTeams','invalid'),{name:'잘못된 팀',order:0,contacts:[{name:'',phone:'bad',email:'bad'},teams[0].contacts[1]]}));
- await service.api('requests',{author_name:'팀 선택 검증',items:[{...item,team:teams[0].name,team_id:teams[0].id,lunch:'미신청'}]});const own=(await service.api('requests')).find(r=>r.author_name==='팀 선택 검증');assert.equal(own.team_id,'management');
+ await service.api('requests',{privacy_consent:consent,author_name:'팀 선택 검증',items:[{...item,team:teams[0].name,team_id:teams[0].id,lunch:'미신청'}]});const own=(await service.api('requests')).find(r=>r.author_name==='팀 선택 검증');assert.equal(own.team_id,'management');
  await service.api('logout',{});
 });
 
@@ -222,22 +226,22 @@ test('notification HTTP handler verifies ownership and atomically prevents dupli
  const owner=createPermitAPI({config:{apiKey:'demo-key',projectId:project},emulator:true,name:'notification-owner',ownerKey:'1'.repeat(64)});const db=getAdminFirestore(adminApp);let sends=0;
  const invoke=async(handler,ids,key)=>{let status=200,result;const res={set(){return this;},status(value){status=value;return this;},json(value){result=value;}};await handler({method:'POST',body:{ids,ownerKey:key},ip:'test-ip'},res);return {status,result};};
  try{
-  const submitted=await owner.api('requests',{author_name:'알림 검증',items:[{...item,team:'관리팀',team_id:'management'}]});
+  const submitted=await owner.api('requests',{privacy_consent:consent,author_name:'알림 검증',items:[{...item,team:'관리팀',team_id:'management'}]});
   const missing=createNotifyHandler({db,Timestamp:AdminTimestamp,getConfig:()=>({})});
   assert.equal((await invoke(missing,submitted.ids,'2'.repeat(64))).status,400);
   const failed=await invoke(missing,submitted.ids,'1'.repeat(64));assert.equal(failed.status,200);assert.equal(failed.result.results.length,4);assert.ok(failed.result.results.every(r=>r.status==='failed'&&r.retryable));
   const configured=createNotifyHandler({db,Timestamp:AdminTimestamp,getConfig:()=>({}),send:async()=>{sends++;return 'fake-receipt';}});
   const done=await invoke(configured,submitted.ids,'1'.repeat(64));assert.equal(done.status,200);assert.ok(done.result.results.every(r=>r.status==='sent'));assert.equal(sends,4);assert.equal(done.result.results[0].to,undefined);assert.equal(done.result.results[0].html,undefined);
   await invoke(configured,submitted.ids,'1'.repeat(64));assert.equal(sends,4);
-  const smsOnly=await owner.api('requests',{author_name:'문자 단독 검증',items:[{...item,team:'관리팀',team_id:'management'}]});const smsHandler=createNotifyHandler({db,Timestamp:AdminTimestamp,getConfig:()=>({solapi:{}}),send:async task=>{assert.equal(task.channel,'sms');return 'fake-sms';}});const smsDone=await invoke(smsHandler,smsOnly.ids,'1'.repeat(64));assert.equal(smsDone.status,200);assert.equal(smsDone.result.results.length,2);assert.ok(smsDone.result.results.every(r=>r.status==='sent'&&r.channel==='sms'));
-  const another=await owner.api('requests',{author_name:'알림 검증',items:[{...item,team:'관리팀',team_id:'management'}]});const overlap=await invoke(configured,[...submitted.ids,...another.ids],'1'.repeat(64));assert.equal(overlap.status,400);assert.match(overlap.result.message,/이미 발송/);assert.equal(sends,4);
+  const smsOnly=await owner.api('requests',{privacy_consent:consent,author_name:'문자 단독 검증',items:[{...item,team:'관리팀',team_id:'management'}]});const smsHandler=createNotifyHandler({db,Timestamp:AdminTimestamp,getConfig:()=>({solapi:{}}),send:async task=>{assert.equal(task.channel,'sms');return 'fake-sms';}});const smsDone=await invoke(smsHandler,smsOnly.ids,'1'.repeat(64));assert.equal(smsDone.status,200);assert.equal(smsDone.result.results.length,2);assert.ok(smsDone.result.results.every(r=>r.status==='sent'&&r.channel==='sms'));
+  const another=await owner.api('requests',{privacy_consent:consent,author_name:'알림 검증',items:[{...item,team:'관리팀',team_id:'management'}]});const overlap=await invoke(configured,[...submitted.ids,...another.ids],'1'.repeat(64));assert.equal(overlap.status,400);assert.match(overlap.result.message,/이미 발송/);assert.equal(sends,4);
  }finally{await deleteApp(owner.app);await db.terminate();}
 });
 
 test('free scheduled queue is atomic for ten visitors, private, deduplicated and readable only through browser receipts',async()=>{
  const {processNotificationQueue}=await import('../functions/lib/queue.js');const queueApp=initializeAdminApp({projectId:project},'queue-tests'),db=getAdminFirestore(queueApp);const owner=createPermitAPI({config:{apiKey:'demo-key',projectId:project},emulator:true,name:'queue-owner',ownerKey:'3'.repeat(64)}),other=createPermitAPI({config:{apiKey:'demo-key',projectId:project},emulator:true,name:'queue-other',ownerKey:'4'.repeat(64)});const sent=[];
  try{
-  const created=await owner.api('requests',{author_name:'예약 알림 검증',items:Array.from({length:10},(_,i)=>({...item,name:'예약방문자'+i,team:'관리팀',team_id:'management'}))});assert.ok(created.queue_id);assert.equal(created.ids.length,10);
+  const created=await owner.api('requests',{privacy_consent:consent,author_name:'예약 알림 검증',items:Array.from({length:10},(_,i)=>({...item,name:'예약방문자'+i,team:'관리팀',team_id:'management'}))});assert.ok(created.queue_id);assert.equal(created.ids.length,10);
   const pending=await owner.api('notify',{queue_id:created.queue_id});assert.equal(pending.results[0].status,'pending');
   const publicDb=env.unauthenticatedContext().firestore();await assertFails(getDoc(doc(publicDb,'notificationQueue',created.queue_id)));await assertFails(setDoc(doc(publicDb,'applicantCopies','3'.repeat(64),'notificationReceipts',created.queue_id),{results:[{status:'sent'}]}));
   await assertFails(setDoc(doc(publicDb,'notificationQueue','z'.repeat(20)),{ids:created.ids,owner_key:'3'.repeat(64),status:'pending',created:serverTimestamp()}));
@@ -249,7 +253,7 @@ test('free scheduled queue is atomic for ten visitors, private, deduplicated and
   await service.api('login',{password:'test-only-password'});assert.equal((await service.api('notify',{request_id:created.ids[0]})).results[0].delivery_status,'delivered');await service.api('logout',{});
   const editable=(await owner.api('requests')).find(r=>r.id===created.ids[0]);await owner.api('owner-update',{...editable,purpose:'문자 조회 후 수정',reviewer:editable.author_name});assert.equal((await originalRef.get()).data().notification_queue_id,created.queue_id);
   const before=sent.length;const queue=(await db.doc('notificationQueue/'+created.queue_id).get()).data();await db.doc('notificationQueue/'+'d'.repeat(20)).set({...queue,status:'pending',leaseUntil:AdminTimestamp.fromMillis(0)});await worker();assert.equal(sent.length,before);
-  const deleted=await owner.api('requests',{author_name:'삭제 알림 검증',items:[{...item,team:'관리팀',team_id:'management'}]});const row=(await owner.api('requests')).find(r=>r.id===deleted.ids[0]);await owner.api('owner-delete',{items:[row]});await worker();assert.equal(sent.length,before);assert.equal((await owner.api('notify',{queue_id:deleted.queue_id})).results[0].status,'failed');
+  const deleted=await owner.api('requests',{privacy_consent:consent,author_name:'삭제 알림 검증',items:[{...item,team:'관리팀',team_id:'management'}]});const row=(await owner.api('requests')).find(r=>r.id===deleted.ids[0]);await owner.api('owner-delete',{items:[row]});await worker();assert.equal(sent.length,before);assert.equal((await owner.api('notify',{queue_id:deleted.queue_id})).results[0].status,'failed');
  }finally{await deleteApp(owner.app);await deleteApp(other.app);await db.terminate();await deleteAdminApp(queueApp);}
 });
 
@@ -258,9 +262,9 @@ test('company persists privately per visitor, rejects missing values and can be 
  const companyApp=initializeAdminApp({projectId:project},'company-tests'),db=getAdminFirestore(companyApp);
  try{
   const {company,...withoutCompany}=item;
-  await assert.rejects(()=>owner.api('requests',{author_name:'회사검증자',items:[withoutCompany]}),/필수/);
-  await assert.rejects(()=>owner.api('requests',{author_name:'회사검증자',items:[{...item,company:'   '}]}),/필수/);
-  const created=await owner.api('requests',{author_name:'회사검증자',items:[{...item,company:'첫회사'},{...item,name:'다른방문자',company:'다른회사'}]});
+  await assert.rejects(()=>owner.api('requests',{privacy_consent:consent,author_name:'회사검증자',items:[withoutCompany]}),/필수/);
+  await assert.rejects(()=>owner.api('requests',{privacy_consent:consent,author_name:'회사검증자',items:[{...item,company:'   '}]}),/필수/);
+  const created=await owner.api('requests',{privacy_consent:consent,author_name:'회사검증자',items:[{...item,company:'첫회사'},{...item,name:'다른방문자',company:'다른회사'}]});
   const records=await Promise.all(created.ids.map(id=>db.doc('requests/'+id).get()));
   assert.deepEqual(records.map(r=>r.data().company),['첫회사','다른회사']);
   const own=(await owner.api('requests')).filter(r=>created.ids.includes(r.id));assert.equal(own.find(r=>r.id===created.ids[0]).company,'첫회사');
@@ -282,7 +286,7 @@ test('UI cache confirms targeted saves, manual refresh observes other clients, a
  const owner=createPermitAPI({config:{apiKey:'demo-key',projectId:project},emulator:true,name:'cache-integration',ownerKey:'5'.repeat(64)});
  const read=(force=false)=>owner.api('requests',undefined,{reuse:true,force});
  try{
-  await read();const created=await owner.api('requests',{author_name:'캐시검증자',items:[item]});
+  await read();const created=await owner.api('requests',{privacy_consent:consent,author_name:'캐시검증자',items:[item]});
   let row=(await read()).find(r=>r.id===created.ids[0]);assert.equal(row.version,1);assert.equal(row.own,true);
   await owner.api('owner-update',{...row,purpose:'캐시 수정',reviewer:'캐시검증자'});
   row=(await read()).find(r=>r.id===row.id);assert.equal(row.version,2);assert.equal(row.purpose,'캐시 수정');

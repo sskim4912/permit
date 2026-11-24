@@ -120,6 +120,8 @@ jobs:
         run: npx --no-install firebase deploy --only hosting,firestore:rules --project permit-daesan-461e8 --non-interactive
         env:
           FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true'
+      - name: Migrate existing public data to masked views
+        run: node scripts/migrate-public-privacy.mjs
       - name: Check published homepage
         run: |
           node scripts/verify-hosting.mjs

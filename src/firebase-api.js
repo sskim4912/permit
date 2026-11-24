@@ -1,11 +1,13 @@
 import {createRequestCache} from './request-cache.js';
 import {requestFastNotification} from './notification-trigger.js';
-import {defaultTeams,validateTeams} from '../functions/lib/directory.js';
+import {validateTeams} from '../functions/lib/team-schema.js';
+import {defaultTeams} from './public-teams.js';
+import {publicTeam} from './privacy-mask.js';
 import {publicRoster} from './public-roster.js';
 import {normalizeRecipients} from './mail-recipients.js';
 import {initializeApp} from 'firebase/app';
 import {getAuth, setPersistence, browserSessionPersistence, inMemoryPersistence, signInWithEmailAndPassword, signOut, connectAuthEmulator} from 'firebase/auth';
-import {getFirestore, collection, doc, getDocs, getDoc, getDocFromServer, setDoc, writeBatch, runTransaction, serverTimestamp, connectFirestoreEmulator} from 'firebase/firestore';
+import {getFirestore, collection, query, where, doc, getDocs, getDoc, getDocFromServer, setDoc, writeBatch, runTransaction, serverTimestamp, connectFirestoreEmulator} from 'firebase/firestore';
 
 export const firebaseConfig = {
   apiKey: 'AIzaSyAVNKvKku3o-nvV0Dc80eB9W4DOJHhdnoU',
@@ -73,10 +75,10 @@ export function createPermitAPI({config=firebaseConfig, emulator=false, name='pe
     if(path==='logout'){await signOut(auth);return {};}
     if(path==='directory'){
       const metaRef=doc(db,'settings','contactDirectory');
-      if(data){directoryCache=null;requireAdmin();const teams=validateTeams(data.teams);const existing=await getDocs(collection(db,'contactTeams'));await runTransaction(db,async tx=>{const meta=await tx.get(metaRef);if((meta.exists()?meta.data().version:0)!==data.version)throw Error('담당자 정보가 변경되었습니다. 창을 닫고 다시 열어 주세요.');for(const old of existing.docs)if(!teams.some(t=>t.id===old.id))tx.delete(old.ref);for(const team of teams){const {id,...record}=team;tx.set(doc(db,'contactTeams',id),record);}tx.set(metaRef,{version:data.version+1,modified_at:serverTimestamp()});});return {teams,version:data.version+1};}
+      if(data){directoryCache=null;requireAdmin();const teams=validateTeams(data.teams);const existing=await getDocs(collection(db,'contactTeams'));await runTransaction(db,async tx=>{const meta=await tx.get(metaRef);if((meta.exists()?meta.data().version:0)!==data.version)throw Error('담당자 정보가 변경되었습니다. 창을 닫고 다시 열어 주세요.');for(const old of existing.docs)if(!teams.some(t=>t.id===old.id)){tx.delete(old.ref);tx.delete(doc(db,'publicContactTeams',old.id));}for(const team of teams){const {id,...record}=team;tx.set(doc(db,'contactTeams',id),record);const {id:publicId,...masked}=publicTeam(team);tx.set(doc(db,'publicContactTeams',publicId),masked);}tx.set(metaRef,{version:data.version+1,modified_at:serverTimestamp()});});return {teams,version:data.version+1};}
       const meta=await getDocFromServer(metaRef),version=meta.exists()?meta.data().version:0,scope=JSON.stringify([config.projectId,auth.currentUser?.uid||'',browserKey()]);
       if(directoryCache?.scope===scope&&directoryCache.version===version)return structuredClone(directoryCache.value);
-      const value=!meta.exists()?{teams:structuredClone(defaultTeams),version:0}:{teams:(await getDocs(collection(db,'contactTeams'))).docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.order-b.order),version};
+      const value=!meta.exists()?{teams:structuredClone(defaultTeams),version:0}:{teams:(await getDocs(collection(db,isAdmin()?'contactTeams':'publicContactTeams'))).docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.order-b.order),version};
       directoryCache={scope,version,value};return structuredClone(value);
     }
     if(path==='notify'){
@@ -91,7 +93,7 @@ export function createPermitAPI({config=firebaseConfig, emulator=false, name='pe
       const snapshot=await getDoc(ref);return {recipient:snapshot.exists()?snapshot.data().recipient:ADMIN_EMAIL};
     }
     if(path==='requests'&&!data){
-      const snapshot=await getDocs(collection(db,isAdmin()?'requests':'publicRequests'));
+      const snapshot=await getDocs(isAdmin()?collection(db,'requests'):query(collection(db,'publicRequests'),where('privacy_version','==',1)));
       if(isAdmin()){
         const published=await getDocs(collection(db,'publicRequests')),byId=new Map(published.docs.map(d=>[d.id,d.data()]));
         const equal=(a,b)=>{if(a===b)return true;if(a?.isEqual)return a.isEqual(b);if(!a||!b||typeof a!=='object'||typeof b!=='object')return false;const keys=Object.keys(a);return keys.length===Object.keys(b).length&&keys.every(k=>equal(a[k],b[k]));};
@@ -105,13 +107,16 @@ export function createPermitAPI({config=firebaseConfig, emulator=false, name='pe
         }
       }
       let rows=snapshot.docs.map(serialize);const key=browserKey();
-      if(!isAdmin()&&key){const own=await getDocs(collection(db,'applicantCopies',key,'items'));const copies=new Map(own.docs.map(s=>[s.id,serialize(s)]));rows=rows.map(row=>{const copy=copies.get(row.id);return copy&&copy.version===row.version?{...copy,own:true}:row;});}
+      if(!isAdmin()&&key){const own=await getDocs(collection(db,'applicantCopies',key,'items'));const copies=new Map(own.docs.map(s=>[s.id,serialize(s)]));rows=rows.map(row=>{const copy=copies.get(row.id);copies.delete(row.id);return copy&&copy.version===row.version?{...copy,own:true}:row;});rows.push(...Array.from(copies.values(),copy=>({...copy,own:true})));}
       return rows.sort((a,b)=>b.created.localeCompare(a.created)||b.id.localeCompare(a.id));
     }
     if(path==='requests'){
       if(!Array.isArray(data.items)||data.items.length<1||data.items.length>10)throw Error('1~10명씩 제출해 주세요.');
+      const consent=data.privacy_consent;
+      if(consent?.version!==1||consent.collection!==true||consent.seetec!==true||typeof consent.proxy!=='boolean')throw Error('개인정보 수집·이용 및 씨텍 제공 동의를 확인해 주세요.');
+      const privacy_consent={version:1,collection:true,seetec:true,proxy:consent.proxy};
       const author_name=personName(data.author_name),owner_key=browserKey(true),items=data.items.map(payload),batch=writeBatch(db),ids=[],queue=items.every(item=>item.team_id)?doc(collection(db,'notificationQueue')):null;
-      for(const item of items){const ref=doc(collection(db,'requests'));ids.push(ref.id);const record={...item,...(queue?{notification_queue_id:queue.id}:{}),author_name,owner_key,status:'승인 대기',reviewer:'',version:1,created:serverTimestamp()};batch.set(ref,record);batch.set(doc(db,'publicRequests',ref.id),summary(record));mirror(batch,ref,record);}
+      for(const item of items){const ref=doc(collection(db,'requests'));ids.push(ref.id);const record={...item,...(queue?{notification_queue_id:queue.id}:{}),author_name,owner_key,privacy_consent,status:'승인 대기',reviewer:'',version:1,created:serverTimestamp()};batch.set(ref,record);batch.set(doc(db,'publicRequests',ref.id),summary(record));mirror(batch,ref,record);}
       let queue_id=null;if(queue){queue_id=queue.id;batch.set(queue,{ids,owner_key,status:'pending',created:serverTimestamp()});}
       await batch.commit();if(queue_id&&!emulator)void requestFastNotification({queue_id,request_id:ids[0],owner_key});return {count:items.length,ids,queue_id};
     }
