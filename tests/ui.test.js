@@ -102,7 +102,7 @@ test('visit periods validate ordering, filter inclusive dates and survive edit, 
   assert.equal(d.querySelector('[name="visit_date"]').type,'date');assert.equal(d.querySelector('[name="visit_end_date"]').type,'date');
   enter('visit_end_date','2026-10-19');await submit();assert.equal(calls.length,0);assert.equal(d.activeElement.name,'visit_end_date');assert.match(d.querySelector('#formError').textContent,/같거나 이후/);
   enter('visit_end_date','2026-10-23');await submit();assert.equal(calls[0].data.items[0].visit_end_date,'2026-10-23');
-  change('dateFilter','2026-10-22');assert.equal(d.querySelectorAll('[data-record]').length,1);assert.match(d.querySelector('#list').textContent,/2026-10-20 ~ 2026-10-23/);
+  change('dateFilter','2026-10-22');assert.equal(d.querySelectorAll('[data-record]').length,1);assert.equal(d.querySelector('.roster-date-full').textContent,'10/20~10/23');assert.equal(d.querySelector('.roster-date-compact').textContent,'10/20~23');assert.equal(d.querySelector('.roster-date-compact').title,'2026-10-20 ~ 2026-10-23');
   change('dateFilter','2026-10-24');assert.equal(d.querySelectorAll('[data-record]').length,0);
   change('dateFilter','2026-10-23');await login();d.querySelector('#reviewer').value='담당자';d.querySelector('[data-select]').click();await d.querySelector('#mail').onclick();assert.match(d.querySelector('#mailPreview').textContent,/2026-10-20 ~ 2026-10-23/);
   await d.querySelector('#downloadDetailedExcel').onclick();const book=new ExcelJS.Workbook();await book.xlsx.load(await getBlob().arrayBuffer());assert.equal(book.worksheets[0].getCell('C2').value,'2026-10-23');
@@ -253,6 +253,9 @@ test('roster displays purpose, vehicle name, shoes and approval status; approval
   assert.equal(d.querySelector('[data-record="one"] [data-label="방문목적"]').textContent,'회의');assert.equal(d.querySelector('[data-record="one"] [data-approval=final_approved]').checked,false);
   assert.equal(d.querySelector('#approve').hidden,true);await d.querySelector('#approve').onclick();assert.equal(calls.length,0);
   await login();d.querySelector('#reviewer').value='승인 담당자';d.querySelector('[data-select="one"]').click();await d.querySelector('#approve').onclick();assert.equal(calls[0].data.action,'approve');assert.equal(d.querySelector('[data-record="one"] [data-approval=final_approved]').checked,true);assert.match(d.querySelector('[data-record="one"] [data-label="최종 승인"]').textContent,/승인 담당자/);
+  const finalTime=d.querySelector('[data-record="one"] .final-approval-cell time');
+  assert.equal(finalTime.textContent,'10/15 12:04');assert.match(finalTime.title,/12:04:05/);
+  d.querySelector('[data-details="one"]').click();assert.match(d.querySelector('#recordDetails').textContent,/승인 담당자.*12:04:05/);
  }finally{dom.window.close();}
 });
 
@@ -292,7 +295,7 @@ test('mail app launches a short empty-body link before clipboard completes and a
 test('lunch selection is required, saved per visitor and sortable with a legacy marker',async()=>{
  const {dom,d,enter,submit,calls}=await setup({own:true});try{
   d.querySelector('[name=lunch]').value='';enter('purpose','점검');enter('team','팀');enter('name','새 신청');enter('birth','19900123');enter('phone','01000000000');await submit();assert.equal(calls.length,0);assert.equal(d.activeElement.name,'lunch');
-  enter('lunch','중식신청');await submit();assert.equal(calls[0].data.items[0].lunch,'중식신청');assert.match(d.querySelector('#list').textContent,/중식신청/);
+  enter('lunch','중식신청');await submit();assert.equal(calls[0].data.items[0].lunch,'중식신청');assert.equal(d.querySelector('[data-record=new0] [data-label=점심신청]').textContent,'신청');
   d.querySelector('.roster-table thead [data-sort=lunch]').click();assert.equal(d.querySelector('[data-sort-heading=lunch]').getAttribute('aria-sort'),'ascending');d.querySelector('.mobile-sort [data-sort=lunch]').click();assert.equal(d.querySelector('[data-sort-heading=lunch]').getAttribute('aria-sort'),'descending');
  }finally{dom.window.close();}
 });

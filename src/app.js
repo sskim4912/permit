@@ -11,7 +11,7 @@ let directoryTeams=structuredClone(defaultTeams),pendingNotificationIds=[],pendi
 const fields = [
  ['visit_date','방문시작일','date'],['visit_end_date','방문종료일','date'],['purpose','방문목적','text','회의 참석'],['team','요청팀','text','안전팀 / 공무팀 / 관리팀'],['gate','출입위치',['서문','정문']],
  ['company','소속 회사명','text','방문자 소속 회사명'],['name','이름','text','방문자 이름'],['birth','생년월일','text',today],['phone','휴대전화','tel','010-0000-0000'],['plate','차량번호','text','123가0000'],
- ['vehicle_type','차종',['승용','승합']],['vehicle_name','차명','text','차명 입력'],['role','탑승 구분',['운전자','동승자','도보']],['shoes','안전화',['필요없음',...Array.from({length:15},(_,i)=>String(230+i*5))]],['lunch','식사신청(중식)',['','중식신청','미신청']]];
+ ['vehicle_type','차종',['승용','승합']],['vehicle_name','차명','text','차명 입력'],['role','탑승 구분',['운전자','동승자','도보']],['shoes','안전화',['필요없음',...Array.from({length:15},(_,i)=>String(230+i*5))]],['lunch','점심신청',['','중식신청','미신청']]];
 const required = new Set(['visit_date','visit_end_date','purpose','team','company','name','birth','phone','lunch']);
 let detailId='';
 let admin=false, rows=[], editing=null, busy=false, timer=null, refreshId=0, recipient='', mailItems=[], mailDocument=null, toastTimer;
@@ -26,7 +26,7 @@ function toast(message){clearTimeout(toastTimer);$('toast').textContent=message;
 function formatBirth(value){const d=value.replace(/\D/g,'').slice(0,8);return [d.slice(0,4),d.slice(4,6),d.slice(6,8)].filter(Boolean).join('-');}
 function formatPhone(value){const d=value.replace(/\D/g,'').slice(0,11);if(d.length<=3)return d;if(d.length<=7)return d.slice(0,3)+'-'+d.slice(3);const split=d.length===11?7:6;return d.slice(0,3)+'-'+d.slice(3,split)+'-'+d.slice(split);}
 function formatInput(input){const pos=input.selectionStart??input.value.length,digits=input.value.slice(0,pos).replace(/\D/g,'').length;input.value=(input.name==='birth'?formatBirth:formatPhone)(input.value);let cursor=0,count=0;while(cursor<input.value.length&&count<digits){if(/\d/.test(input.value[cursor]))count++;cursor++;}if(input.value[cursor]==='-')cursor++;input.setSelectionRange(cursor,cursor);}
-function markup([key,label,type,hint],item){const value=item[key]??(key==='visit_end_date'?(item.visit_date??today):key==='visit_date'?today:'');let control;if(key==='team'){const known=directoryTeams.some(t=>t.name===value);control=`<select name="team" aria-label="요청팀" required><option value="">팀 선택</option>${value&&!known?`<option selected value="${esc(value)}">기존: ${esc(value)}</option>`:''}${directoryTeams.map(t=>`<option value="${esc(t.name)}" data-team-id="${esc(t.id)}" ${t.name===value?'selected':''}>${esc(teamLabel(t))}</option>`).join('')}</select>`;}else if(Array.isArray(type)){const legacy=value&&!type.includes(value)?`<option selected disabled value="${esc(value)}">기존값: ${esc(value)}</option>`:'';control=`<select name="${key}" aria-label="${label}" ${required.has(key)?'required':''}>${legacy}${type.map(v=>`<option value="${v}" ${v===value?'selected':''}>${key==='lunch'?(v===''?'선택해 주세요':v==='중식신청'?'중식 신청':'미신청'):key==='gate'&&v==='정문'?'정문 [VIP]':v}${key==='shoes'&&v!=='필요없음'?'mm':''}</option>`).join('')}</select>`;}else control=`<input name="${key}" type="${type}" aria-label="${label}" ${required.has(key)?'required':''} maxlength="200" placeholder="${hint||''}" value="${esc(value)}">`;return `<label><span>${label}${required.has(key)?' *':''}</span>${control}${key==='lunch'?'<small class="meal-hint">중식 신청 / 미신청 중 선택</small>':''}</label>`;}
+function markup([key,label,type,hint],item){const value=item[key]??(key==='visit_end_date'?(item.visit_date??today):key==='visit_date'?today:'');let control;if(key==='team'){const known=directoryTeams.some(t=>t.name===value);control=`<select name="team" aria-label="요청팀" required><option value="">팀 선택</option>${value&&!known?`<option selected value="${esc(value)}">기존: ${esc(value)}</option>`:''}${directoryTeams.map(t=>`<option value="${esc(t.name)}" data-team-id="${esc(t.id)}" ${t.name===value?'selected':''}>${esc(teamLabel(t))}</option>`).join('')}</select>`;}else if(Array.isArray(type)){const legacy=value&&!type.includes(value)?`<option selected disabled value="${esc(value)}">기존값: ${esc(value)}</option>`:'';control=`<select name="${key}" aria-label="${label}" ${required.has(key)?'required':''}>${legacy}${type.map(v=>`<option value="${v}" ${v===value?'selected':''}>${key==='lunch'?(v===''?'선택해 주세요':v==='중식신청'?'점심신청':'미신청'):key==='gate'&&v==='정문'?'정문 [VIP]':v}${key==='shoes'&&v!=='필요없음'?'mm':''}</option>`).join('')}</select>`;}else control=`<input name="${key}" type="${type}" aria-label="${label}" ${required.has(key)?'required':''} maxlength="200" placeholder="${hint||''}" value="${esc(value)}">`;return `<label><span>${label}${required.has(key)?' *':''}</span>${control}${key==='lunch'?'<small class="meal-hint">점심신청 / 미신청 중 선택</small>':''}</label>`;}
 function renumber(){[...$('people').children].forEach((box,index)=>box.querySelector('.person-title b').textContent='방문자 '+(index+1));}
 function addPerson(item={},save=false){if($('people').children.length>=10){toast('한 번에 10명까지 신청할 수 있습니다.');return;}const box=document.createElement('section');box.className='person';box.innerHTML='<div class="person-title"><b></b><button type="button" aria-label="방문자 삭제">×</button></div><div class="person-fields">'+fields.map(field=>markup(field,item)).join('')+'</div>';
  for(const input of box.querySelectorAll('[name="birth"],[name="phone"]')){input.value=(input.name==='birth'?formatBirth:formatPhone)(input.value);input.inputMode='numeric';input.maxLength=input.name==='birth'?10:13;input.addEventListener('input',()=>formatInput(input));input.addEventListener('keydown',event=>{const pos=input.selectionStart;if(event.key==='Backspace'&&pos===input.selectionEnd&&pos>0&&input.value[pos-1]==='-')input.setSelectionRange(Math.max(0,pos-2),pos);});}
@@ -62,9 +62,21 @@ function rosterVisitPeriod(row){
  const start=row.visit_date,end=endDate(row);
  const shortDate=date=>date.slice(5).replace('-','/');
  const sameYear=start.slice(0,4)===end.slice(0,4);
- const format=date=>esc(sameYear?shortDate(date):date);
- const mobilePeriod=start===end?format(start):`<span>${format(start)}~</span><span>${format(end)}</span>`;
- return `<span class="roster-date-full">${esc(visitPeriod(row))}</span><span class="roster-date-compact">${mobilePeriod}</span>`;
+ const format=date=>sameYear?shortDate(date):date.slice(2).replaceAll('-','/');
+ const desktop=start===end?format(start):format(start)+'~'+format(end);
+ const mobile=start===end?shortDate(start):shortDate(start)+'~'+(start.slice(0,7)===end.slice(0,7)?end.slice(8):shortDate(end));
+ return `<span class="roster-date-full"${sameYear?'':' data-cross-year'} title="${esc(visitPeriod(row))}">${esc(desktop)}</span><span class="roster-date-compact" title="${esc(visitPeriod(row))}">${esc(mobile)}</span>`;
+}
+const lunchLabel=row=>row.lunch==='중식신청'?'신청':row.lunch||'미선택';
+const approvalTimeFull=new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+const approvalTimeShort=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
+function approvalDate(record){
+ const date=new Date(record.at?.toDate?.()||record.at);
+ return Number.isNaN(date.getTime())?null:date;
+}
+function finalApprovalDetail(row){
+ const record=row.final_approved,date=record&&approvalDate(record);
+ return record?[record.by,date&&approvalTimeFull.format(date)].filter(Boolean).join(' · '):row.status==='승인 완료'?'기존 승인 기록':'미처리';
 }
 let weekOffset=0,allWeeks=false;
 function weekRange(){const d=new Date(today+'T12:00:00Z');d.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7)+weekOffset*7);const start=d.toISOString().slice(0,10);d.setUTCDate(d.getUTCDate()+6);return [start,d.toISOString().slice(0,10)];}
@@ -86,7 +98,7 @@ function sortRows(data){return data.sort((a,b)=>{
 function visibleRows(){return sortRows(rows.filter(matchesFilters));}
 function renderSort(){
  for(const button of document.querySelectorAll('[data-sort]')){
-  const field=button.dataset.sort,active=field===sortField,label=approvalSortLabels[field]?(button.closest('.mobile-sort')&&field!=='final_approved'?'가이수 ':'')+approvalSortLabels[field]:{name:'이름',gate:'출입위치',lunch:'식사신청(중식)',visit_date:'출입날짜'}[field];
+  const field=button.dataset.sort,active=field===sortField,label=approvalSortLabels[field]?(button.closest('.mobile-sort')&&field!=='final_approved'?'가이수 ':'')+approvalSortLabels[field]:{name:'이름',gate:'출입위치',lunch:'점심신청',visit_date:'출입날짜'}[field];
   button.textContent=label+' '+(active?(sortDirection==='asc'?'▲':'▼'):'↕');button.classList.toggle('is-active',active);
   button.setAttribute('aria-label',(field in approvalSortLabels&&field!=='final_approved'?'가이수 '+approvalSortLabels[field]:label)+' '+(active&&sortDirection==='asc'?'내림차순':'오름차순')+'으로 정렬');
  }
@@ -107,7 +119,7 @@ function renderRecord(){
  const personal=admin||row.own,field=(label,value)=>`<div><dt>${esc(label)}</dt><dd>${esc(value||'—')}</dd></div>`;
  $('recordTitle').textContent=(row.name||'신청')+' · 상세·수정';$('recordReviewerBar').hidden=!admin;$('recordReviewer').value=$('reviewer').value;
  const historyOpen=$('recordDetails').querySelector('.record-history')?.open;
- $('recordDetails').innerHTML=`<dl class="record-grid">${field('출입 기간',visitPeriod(row))}${personal?field('소속 회사',row.company||'미입력(기존 신청)'):''}${field('요청팀',row.team)}${field('생년월일',personal?row.birth:row.birth_mask||'****-**-**')}${field('휴대전화',row.phone)}${field('차량번호',row.plate)}${field('차명',row.vehicle_name)}${field('탑승 구분',row.role)}${field('출입위치',row.gate)}${field('중식 신청',row.lunch||'미선택(기존 신청)')}${field('안전화',row.shoes)}<div class="record-purpose">${'<dt>방문목적</dt><dd>'+esc(row.purpose||'—')+'</dd>'}</div></dl>${personal?`<details class="record-history"><summary>처리 이력</summary><dl class="record-grid">${field('최초 신청자',row.author_name||'기존 신청')}${field('최근 수정자',row.modified_by)}${field('최근 수정 시각',row.modified_at?new Date(row.modified_at).toLocaleString('ko-KR'):'')}${admin?field('발주처 전달',deliveryLabel(row)):''}</dl></details>`:''}`;
+ $('recordDetails').innerHTML=`<dl class="record-grid">${field('출입 기간',visitPeriod(row))}${personal?field('소속 회사',row.company||'미입력(기존 신청)'):''}${field('요청팀',row.team)}${field('생년월일',personal?row.birth:row.birth_mask||'****-**-**')}${field('휴대전화',row.phone)}${field('차량번호',row.plate)}${field('차명',row.vehicle_name)}${field('탑승 구분',row.role)}${field('출입위치',row.gate)}${field('점심신청',lunchLabel(row))}${field('최종 승인',finalApprovalDetail(row))}${field('안전화',row.shoes)}<div class="record-purpose">${'<dt>방문목적</dt><dd>'+esc(row.purpose||'—')+'</dd>'}</div></dl>${personal?`<details class="record-history"><summary>처리 이력</summary><dl class="record-grid">${field('최초 신청자',row.author_name||'기존 신청')}${field('최근 수정자',row.modified_by)}${field('최근 수정 시각',row.modified_at?new Date(row.modified_at).toLocaleString('ko-KR'):'')}${admin?field('발주처 전달',deliveryLabel(row)):''}</dl></details>`:''}`;
  if(historyOpen&&$('recordDetails').querySelector('.record-history'))$('recordDetails').querySelector('.record-history').open=true;
  $('recordActions').innerHTML=(canEdit(row)?`<button type="button" class="primary" data-edit="${esc(row.id)}">수정하기</button><button type="button" class="danger" data-delete="${esc(row.id)}">삭제하기</button>`:row.own?'<small>전달·승인 후에는 관리자에게 문의해 주세요.</small>':'')+(personal?`<button type="button" class="outline" data-notification="${esc(row.id)}">문자 발송 결과 확인</button>`:'');
 }
@@ -116,8 +128,15 @@ const approvalStages=[['gaisu_requested','가이수 신청'],['gaisu_approved','
 function approvalCell(row,key,label){
  const record=row[key],done=approvalDone(row,key);
  const allowed=admin||(row.own&&key!=='final_approved'&&row.status!=='승인 완료'&&!row.final_approved);
- const stamp=record?`<strong>${esc(record.by)}</strong><time>${esc(new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(record.at?.toDate?.()||record.at)))}</time>`:done?'<small>기존 승인 기록</small>':'<small>미처리</small>';
- return `<td data-label="${label}" class="approval-cell"><label class="approval-record"><input type="checkbox" data-approval="${key}" data-id="${esc(row.id)}" aria-label="${esc(row.name||'신청')} ${label}" ${done?'checked':''} ${!allowed||done||busy?'disabled':''}><span>${stamp}</span></label></td>`;
+ const date=record&&approvalDate(record);
+ const fullTime=date?approvalTimeFull.format(date):'';
+ let displayTime=fullTime;
+ if(date&&key==='final_approved'){
+  const parts=Object.fromEntries(approvalTimeShort.formatToParts(date).map(({type,value})=>[type,value]));
+  displayTime=parts.month+'/'+parts.day+' '+parts.hour+':'+parts.minute;
+ }
+ const stamp=record?`<strong>${esc(record.by)}</strong>${date?`<time datetime="${date.toISOString()}" title="${esc(fullTime)}">${esc(displayTime)}</time>`:''}`:done?'<small>기존 승인 기록</small>':'<small>미처리</small>';
+ return `<td data-label="${label}" class="approval-cell ${key==='final_approved'?'final-approval-cell':''}"><label class="approval-record"><input type="checkbox" data-approval="${key}" data-id="${esc(row.id)}" aria-label="${esc(row.name||'신청')} ${label}" ${done?'checked':''} ${!allowed||done||busy?'disabled':''}><span>${stamp}</span></label></td>`;
 }
 async function processApproval(checkbox){
  const row=rows.find(r=>r.id===checkbox.dataset.id),stage=checkbox.dataset.approval,label=approvalStages.find(([key])=>key===stage)?.[1];checkbox.checked=false;
@@ -134,7 +153,7 @@ function render(){directoryUI.setAdmin(admin);$('notificationManual').hidden=!(a
  const cell=(label,value,cls='')=>`<td data-label="${label}" class="${cls}">${value}</td>`;
  $('list').innerHTML=list.length?list.map((row,index)=>{
  const personal=admin||row.own, value=key=>key==='birth'&&!personal?esc(row.birth_mask||'****-**-**'):esc(row[key]||'—');
- return `<tr data-record="${esc(row.id)}" class="${selected.has(row.id)?'selected':''}">${cell('순번',`<span class="number-choice"><span>${index+1}</span>${canEdit(row)?`<input type="checkbox" data-select="${esc(row.id)}" aria-label="${esc(row.name||'신청')} 선택" ${selected.has(row.id)?'checked':''}>`:''}</span>`,'number-cell')}${cell('출입날짜',rosterVisitPeriod(row))}${cell('이름',`<button type="button" class="record-info record-link" data-details="${esc(row.id)}"><span class="visitor-name">${value('name')}</span><span class="record-action-label">상세·수정</span></button>`)}${cell('생년월일',value('birth'))}${cell('휴대전화번호',value('phone'))}${cell('차량번호',value('plate'))}${cell('차명',value('vehicle_name'))}${cell('운전자 해당여부',value('role'))}${cell('방문목적',`<span class="purpose-preview" title="${esc(row.purpose||'—')}">${esc(row.purpose||'—')}</span>`)}${cell('출입위치',esc(row.gate||'—'))}${approvalStages.map(([key,label])=>approvalCell(row,key,label)).join('')}${cell('식사신청(중식) 여부',esc(row.lunch||'미선택(기존 신청)'))}${cell('안전화',value('shoes'))}</tr>`;
+ return `<tr data-record="${esc(row.id)}" class="${selected.has(row.id)?'selected':''}">${cell('순번',`<span class="number-choice"><span>${index+1}</span>${canEdit(row)?`<input type="checkbox" data-select="${esc(row.id)}" aria-label="${esc(row.name||'신청')} 선택" ${selected.has(row.id)?'checked':''}>`:''}</span>`,'number-cell')}${cell('출입날짜',rosterVisitPeriod(row))}${cell('이름',`<button type="button" class="record-info record-link" data-details="${esc(row.id)}"><span class="visitor-name">${value('name')}</span><span class="record-action-label">상세·수정</span></button>`)}${cell('생년월일',value('birth'))}${cell('휴대전화번호',value('phone'))}${cell('차량번호',value('plate'))}${cell('차명',value('vehicle_name'))}${cell('운전자 해당여부',value('role'))}${cell('방문목적',`<span class="purpose-preview" title="${esc(row.purpose||'—')}">${esc(row.purpose||'—')}</span>`)}${cell('출입위치',esc(row.gate||'—'))}${approvalStages.map(([key,label])=>approvalCell(row,key,label)).join('')}${cell('점심신청',esc(lunchLabel(row)))}${cell('안전화',value('shoes'))}</tr>`;
  }).join(''):`<tr><td class="empty" colspan="15">해당 조건의 신청이 없습니다.</td></tr>`;
  attachEditor();renderRecord();if(editing&&focused)focused.focus({preventScroll:true});updateSelection();}
 async function refresh(force=false){const sequence=++refreshId;try{const session=await api('session');if(sequence!==refreshId)return;const wasAdmin=admin;admin=session.reviewer;if(wasAdmin&&!admin){clearReviewer();closeRecord();notificationUI.close();selected.clear();if(editing)closeEditor();clearMail();}if(admin&&!wasAdmin){try{const name=sessionStorage.getItem('permit-reviewer-session')||'';if(name.length<=50)rememberReviewer(name);}catch(e){}}if(!admin)clearReviewer();const data=await api('requests',undefined,{force,reuse:true});if(sequence!==refreshId)return;rows=data;render();$('updated').textContent='목록 확인 '+new Date().toLocaleTimeString('ko-KR');$('loadError').textContent='';}catch(e){if(sequence!==refreshId)return;rows=[];render();$('loadError').textContent='목록을 불러오지 못했습니다. '+e.message;}}
