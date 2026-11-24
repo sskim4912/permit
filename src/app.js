@@ -74,6 +74,17 @@ function approvalDate(record){
  const date=new Date(record.at?.toDate?.()||record.at);
  return Number.isNaN(date.getTime())?null:date;
 }
+function shortApprovalTime(date){
+ const parts=Object.fromEntries(approvalTimeShort.formatToParts(date).map(({type,value})=>[type,value]));
+ return parts.month+'/'+parts.day+' '+parts.hour+':'+parts.minute;
+}
+function recordApprovalSummary(row){
+ return `<dl class="record-approval-summary">${approvalStages.map(([key,label])=>{
+  const record=row[key],date=record&&approvalDate(record);
+  const status=record?`<strong>${esc(record.by||'완료')}</strong>${date?`<time datetime="${date.toISOString()}" title="${esc(approvalTimeFull.format(date))}">${esc(shortApprovalTime(date))}</time>`:''}`:approvalDone(row,key)?'기존 승인 기록':'미처리';
+  return `<div><dt>${label}</dt><dd>${status}</dd></div>`;
+ }).join('')}</dl>`;
+}
 function finalApprovalDetail(row){
  const record=row.final_approved,date=record&&approvalDate(record);
  return record?[record.by,date&&approvalTimeFull.format(date)].filter(Boolean).join(' · '):row.status==='승인 완료'?'기존 승인 기록':'미처리';
@@ -116,10 +127,10 @@ function attachEditor(){if(editing)$('recordEditorHost').append($('requestPanel'
 function closeRecord(){if(editing)closeEditor();detailId='';$('recordDialog').close();$('recordDetails').innerHTML='';$('recordActions').innerHTML='';$('recordError').textContent='';}
 function renderRecord(){
  if(!detailId||editing)return;const row=rows.find(r=>r.id===detailId);if(!row){closeRecord();return;}
- const personal=admin||row.own,field=(label,value)=>`<div><dt>${esc(label)}</dt><dd>${esc(value||'—')}</dd></div>`;
+ const personal=admin||row.own,field=(label,value)=>`<div data-field="${esc(label)}"><dt>${esc(label)}</dt><dd>${esc(value||'—')}</dd></div>`;
  $('recordTitle').textContent=(row.name||'신청')+' · 상세·수정';$('recordReviewerBar').hidden=!admin;$('recordReviewer').value=$('reviewer').value;
  const historyOpen=$('recordDetails').querySelector('.record-history')?.open;
- $('recordDetails').innerHTML=`<dl class="record-grid">${field('출입 기간',visitPeriod(row))}${personal?field('소속 회사',row.company||'미입력(기존 신청)'):''}${field('요청팀',row.team)}${field('생년월일',personal?row.birth:row.birth_mask||'****-**-**')}${field('휴대전화',row.phone)}${field('차량번호',row.plate)}${field('차명',row.vehicle_name)}${field('탑승 구분',row.role)}${field('출입위치',row.gate)}${field('점심신청',lunchLabel(row))}${field('최종 승인',finalApprovalDetail(row))}${field('안전화',row.shoes)}<div class="record-purpose">${'<dt>방문목적</dt><dd>'+esc(row.purpose||'—')+'</dd>'}</div></dl>${personal?`<details class="record-history"><summary>처리 이력</summary><dl class="record-grid">${field('최초 신청자',row.author_name||'기존 신청')}${field('최근 수정자',row.modified_by)}${field('최근 수정 시각',row.modified_at?new Date(row.modified_at).toLocaleString('ko-KR'):'')}${admin?field('발주처 전달',deliveryLabel(row)):''}</dl></details>`:''}`;
+ $('recordDetails').innerHTML=`<dl class="record-grid record-overview">${field('출입 기간',visitPeriod(row))}${personal?field('소속 회사',row.company||'미입력(기존 신청)'):''}${field('요청팀',row.team)}${field('생년월일',personal?row.birth:row.birth_mask||'****-**-**')}${field('휴대전화',row.phone)}${field('차량번호',row.plate)}${field('차명',row.vehicle_name)}${field('탑승 구분',row.role)}${field('출입위치',row.gate)}${field('점심신청',lunchLabel(row))}${field('최종 승인',finalApprovalDetail(row))}${field('안전화',row.shoes)}<div class="record-purpose">${'<dt>방문목적</dt><dd>'+esc(row.purpose||'—')+'</dd>'}</div></dl>${recordApprovalSummary(row)}${personal?`<details class="record-history"><summary>처리 이력</summary><dl class="record-grid">${field('최초 신청자',row.author_name||'기존 신청')}${field('최근 수정자',row.modified_by)}${field('최근 수정 시각',row.modified_at?new Date(row.modified_at).toLocaleString('ko-KR'):'')}${admin?field('발주처 전달',deliveryLabel(row)):''}</dl></details>`:''}`;
  if(historyOpen&&$('recordDetails').querySelector('.record-history'))$('recordDetails').querySelector('.record-history').open=true;
  $('recordActions').innerHTML=(canEdit(row)?`<button type="button" class="primary" data-edit="${esc(row.id)}">수정하기</button><button type="button" class="danger" data-delete="${esc(row.id)}">삭제하기</button>`:row.own?'<small>전달·승인 후에는 관리자에게 문의해 주세요.</small>':'')+(personal?`<button type="button" class="outline" data-notification="${esc(row.id)}">문자 발송 결과 확인</button>`:'');
 }
@@ -130,11 +141,7 @@ function approvalCell(row,key,label){
  const allowed=admin||(row.own&&key!=='final_approved'&&row.status!=='승인 완료'&&!row.final_approved);
  const date=record&&approvalDate(record);
  const fullTime=date?approvalTimeFull.format(date):'';
- let displayTime=fullTime;
- if(date&&key==='final_approved'){
-  const parts=Object.fromEntries(approvalTimeShort.formatToParts(date).map(({type,value})=>[type,value]));
-  displayTime=parts.month+'/'+parts.day+' '+parts.hour+':'+parts.minute;
- }
+ const displayTime=date&&key==='final_approved'?shortApprovalTime(date):fullTime;
  const completedMark=key==='final_approved'&&done?'<span class="approval-complete-mark" role="img" aria-label="완료">✓ </span>':'';
  const stamp=record?`<strong>${completedMark}${esc(record.by)}</strong>${date?`<time datetime="${date.toISOString()}" title="${esc(fullTime)}">${esc(displayTime)}</time>`:''}`:done?`<small>${completedMark}기존 승인 기록</small>`:'<small>미처리</small>';
  return `<td data-label="${label}" class="approval-cell ${key==='final_approved'?'final-approval-cell':''}"><label class="approval-record"><input type="checkbox" data-approval="${key}" data-id="${esc(row.id)}" aria-label="${esc(row.name||'신청')} ${label}" ${done?'checked':''} ${!allowed||done||busy?'disabled':''}><span>${stamp}</span></label></td>`;
