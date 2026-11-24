@@ -93,7 +93,7 @@ test('new submissions require two independent consents and offer a confirmed sta
  }finally{dom.window.close();}
 });
 test('numeric input autoformats, auto-saves and submits without manual draft commands',async()=>{
- const {dom,w,d,enter,calls,submit}=await setup();try{enter('purpose','테스트');enter('team','테스트팀');enter('name','가상방문자');assert.equal(enter('birth','19900123').value,'1990-01-23');assert.equal(enter('phone','01000000000').value,'010-0000-0000');await tick();assert.equal(JSON.parse(w.sessionStorage.getItem('permit-draft'))[0].birth,'1990-01-23');assert.match(d.querySelector('#draftStatus').textContent,/자동 임시저장됨/);await submit();assert.equal(calls[0].data.items[0].phone,'010-0000-0000');assert.equal(w.sessionStorage.getItem('permit-draft'),null);assert.equal(d.querySelector('[name="name"]').value,'');assert.match(d.querySelector('#list').textContent,/미처리/);}finally{dom.window.close();}
+ const {dom,w,d,enter,calls,submit}=await setup();try{enter('purpose','테스트');enter('team','테스트팀');enter('name','가상방문자');assert.equal(enter('birth','19900123').value,'1990-01-23');assert.equal(enter('phone','01000000000').value,'010-0000-0000');await tick();assert.equal(JSON.parse(w.sessionStorage.getItem('permit-draft'))[0].birth,'1990-01-23');assert.match(d.querySelector('#draftStatus').textContent,/자동 임시저장됨/);assert.equal(d.querySelector('#privacyApplicantName').textContent,'가상방문자');assert.equal(d.querySelector('#authorLine').hidden,true);await submit();assert.equal(calls[0].data.author_name,'가상방문자');assert.equal(calls[0].data.items[0].phone,'010-0000-0000');assert.equal(w.sessionStorage.getItem('permit-draft'),null);assert.equal(d.querySelector('[name="name"]').value,'');assert.match(d.querySelector('#list').textContent,/미처리/);}finally{dom.window.close();}
 });
 test('old tab drafts restore automatically with per-person visit details',async()=>{
  const saved=[{...base,purpose:'회의'},{...base,name:'다른방문자',purpose:'점검',team:'안전팀',gate:'정문',visit_date:'2026-10-16'}];const {dom,d}=await setup({draft:saved});try{assert.equal(d.querySelectorAll('.person').length,2);assert.equal(d.querySelectorAll('[name="purpose"]')[1].value,'점검');assert.equal(d.querySelectorAll('[name="gate"]')[1].value,'정문');assert.match(d.querySelector('#draftStatus').textContent,/복원/);}finally{dom.window.close();}
@@ -154,7 +154,7 @@ test('legacy drafts and records use a same-day end; starting date changes keep s
 test('one author is required per submission and is saved with every visitor',async()=>{
  const {dom,d,submit,calls,enter}=await setup({draft:[{...base},{...base,name:'다른 방문자'}]});try{
   d.querySelector('#authorName').value='';await submit();assert.equal(d.activeElement.id,'authorName');assert.equal(calls.length,0);
-  d.querySelector('#authorName').value='최초 작성 담당';await submit();assert.equal(calls[0].data.author_name,'최초 작성 담당');assert.equal(calls[0].data.items.length,2);
+  d.querySelector('#authorName').value='최초 작성 담당';await submit();assert.equal(calls[0].data.author_name,'최초 작성 담당');assert.equal(calls[0].data.items.length,2);assert.equal(calls[0].data.privacy_consent.proxy,true);
  }finally{dom.window.close();}
 });
 test('applicant edit and confirmed deletion reuse stored author without processor input',async()=>{
@@ -501,7 +501,7 @@ test('administrator edits from the detail dialog, enters reviewer locally, reuse
   assert.equal(d.querySelector('#recordDialog').open,true);assert.ok(d.querySelector('#recordEditorHost #requestForm'));enter('purpose','현장 방문 목적 수정');
   await submit();assert.equal(calls.filter(c=>c.path==='update').length,0);assert.equal(d.activeElement.id,'recordReviewer');assert.match(d.querySelector('#recordError').textContent,/처리자 이름/);
   d.querySelector('#recordReviewer').value='현장담당';d.querySelector('#recordReviewer').dispatchEvent(new w.Event('input',{bubbles:true}));await submit();
-  assert.equal(calls.find(c=>c.path==='update').data.reviewer,'현장담당');assert.equal(w.sessionStorage.getItem('permit-reviewer-session'),'현장담당');assert.equal(d.querySelector('#recordDialog').open,false);assert.equal(d.querySelector('#authorLine').hidden,false);
+  assert.equal(calls.find(c=>c.path==='update').data.reviewer,'현장담당');assert.equal(w.sessionStorage.getItem('permit-reviewer-session'),'현장담당');assert.equal(d.querySelector('#recordDialog').open,false);assert.equal(d.querySelector('#authorLine').hidden,true);
   d.querySelector('[data-details=one]').click();assert.equal(d.querySelector('#recordReviewer').value,'현장담당');
   await d.querySelector('#recordActions').onclick({target:d.querySelector('[data-delete=one]')});assert.equal(calls.find(c=>c.path==='bulk').data.reviewer,'현장담당');
   await d.querySelector('#login').onclick();assert.equal(d.querySelector('#reviewer').value,'');assert.equal(w.sessionStorage.getItem('permit-reviewer-session'),null);assert.equal(d.querySelector('#recordDialog').open,false);assert.equal(d.querySelector('#recordDetails').textContent,'');
