@@ -65,14 +65,14 @@ async function setup({draft=null,blocked=false,own=false,defaultCompany=true}={}
 test('one screen and two statuses; public names are visible while original birth and privileged controls are hidden',async()=>{
  const {dom,d}=await setup();try{assert.equal(d.querySelector('#requestPanel').hidden,false);assert.equal(d.querySelector('#adminControls').hidden,true);assert.equal(d.querySelector('#adminSettings').hidden,true);assert.equal(d.querySelectorAll('[data-select]').length,0);assert.equal(d.querySelectorAll('[data-edit]').length,0);assert.ok(d.querySelector('#list').textContent.includes('가상방문*'));assert.ok(!d.querySelector('#list').textContent.includes('1990-01-23'));assert.deepEqual([...d.querySelector('#statusFilter').options].map(option=>option.textContent),['전체','승인 대기','승인 완료']);assert.ok(!d.querySelector('#list').textContent.includes('현장 제출'));}finally{dom.window.close();}
 });
-test('new submissions require two independent consents and confirmation for proxy applications',async()=>{
+test('new submissions require two independent consents and offer a confirmed staff input mode',async()=>{
  const {dom,d}=await setup();try{
   const byId=id=>d.getElementById(id);
   assert.equal(byId('submit').disabled,true);
   byId('privacyCollection').click();assert.equal(byId('submit').disabled,true);
   byId('privacyThirdParty').click();assert.equal(byId('submit').disabled,false);
-  byId('privacyProxy').click();assert.equal(byId('submit').disabled,true);
-  byId('privacyProxyConfirmed').click();assert.equal(byId('submit').disabled,false);
+  assert.equal(byId('privacyInputMode').value,'self');
+  assert.match(byId('privacyInputMode').options[1].textContent,/현장 담당자.*동의 확인/);
   assert.equal(byId('privacyPolicyLink').getAttribute('href'),'/privacy.html');
  }finally{dom.window.close();}
 });

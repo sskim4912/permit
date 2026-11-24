@@ -435,3 +435,6 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
  #requestActions:has(#privacyCollectionLabel:not([hidden])){display:grid;grid-template-columns:1fr 1.25fr 1fr;gap:4px;align-items:stretch}
  #requestActions #submit,#privacyPolicyLink,#privacyCollectionLabel{font-size:11px;min-height:44px;padding:4px}
 }
+
+#privacyInputMode{max-width:100%;min-width:0;padding:4px;border:1px solid #b8cbbd;border-radius:5px;background:white;color:inherit}
+#privacyInputHelp{margin:0;color:#536b5e;font-size:.9em}
