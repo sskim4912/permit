@@ -58,6 +58,14 @@ function validate(){ $('formError').textContent='';if(!editing&&(!$('authorName'
  if(editing&&!actionActor([editing],$('formError')))return false;return true;}
 const endDate=row=>row.visit_end_date??row.visit_date;
 const visitPeriod=row=>row.visit_date===endDate(row)?row.visit_date:row.visit_date+' ~ '+endDate(row);
+function rosterVisitPeriod(row){
+ const start=row.visit_date,end=endDate(row);
+ const shortDate=date=>date.slice(5).replace('-','/');
+ const sameYear=start.slice(0,4)===end.slice(0,4);
+ const format=date=>esc(sameYear?shortDate(date):date);
+ const mobilePeriod=start===end?format(start):`<span>${format(start)}~</span><span>${format(end)}</span>`;
+ return `<span class="roster-date-full">${esc(visitPeriod(row))}</span><span class="roster-date-compact">${mobilePeriod}</span>`;
+}
 let weekOffset=0,allWeeks=false;
 function weekRange(){const d=new Date(today+'T12:00:00Z');d.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7)+weekOffset*7);const start=d.toISOString().slice(0,10);d.setUTCDate(d.getUTCDate()+6);return [start,d.toISOString().slice(0,10)];}
 function renderWeek(){
@@ -126,7 +134,7 @@ function render(){directoryUI.setAdmin(admin);$('notificationManual').hidden=!(a
  const cell=(label,value,cls='')=>`<td data-label="${label}" class="${cls}">${value}</td>`;
  $('list').innerHTML=list.length?list.map((row,index)=>{
  const personal=admin||row.own, value=key=>key==='birth'&&!personal?esc(row.birth_mask||'****-**-**'):esc(row[key]||'—');
- return `<tr data-record="${esc(row.id)}" class="${selected.has(row.id)?'selected':''}">${cell('순번',`<span class="number-choice"><span>${index+1}</span>${canEdit(row)?`<input type="checkbox" data-select="${esc(row.id)}" aria-label="${esc(row.name||'신청')} 선택" ${selected.has(row.id)?'checked':''}>`:''}</span>`,'number-cell')}${cell('출입날짜',esc(visitPeriod(row)))}${cell('이름',`<button type="button" class="record-info record-link" data-details="${esc(row.id)}"><span class="visitor-name">${value('name')}</span><span class="record-action-label">상세·수정</span></button>`)}${cell('생년월일',value('birth'))}${cell('휴대전화번호',value('phone'))}${cell('차량번호',value('plate'))}${cell('차명',value('vehicle_name'))}${cell('운전자 해당여부',value('role'))}${cell('방문목적',`<span class="purpose-preview" title="${esc(row.purpose||'—')}">${esc(row.purpose||'—')}</span>`)}${cell('출입위치',esc(row.gate||'—'))}${approvalStages.map(([key,label])=>approvalCell(row,key,label)).join('')}${cell('식사신청(중식) 여부',esc(row.lunch||'미선택(기존 신청)'))}${cell('안전화',value('shoes'))}</tr>`;
+ return `<tr data-record="${esc(row.id)}" class="${selected.has(row.id)?'selected':''}">${cell('순번',`<span class="number-choice"><span>${index+1}</span>${canEdit(row)?`<input type="checkbox" data-select="${esc(row.id)}" aria-label="${esc(row.name||'신청')} 선택" ${selected.has(row.id)?'checked':''}>`:''}</span>`,'number-cell')}${cell('출입날짜',rosterVisitPeriod(row))}${cell('이름',`<button type="button" class="record-info record-link" data-details="${esc(row.id)}"><span class="visitor-name">${value('name')}</span><span class="record-action-label">상세·수정</span></button>`)}${cell('생년월일',value('birth'))}${cell('휴대전화번호',value('phone'))}${cell('차량번호',value('plate'))}${cell('차명',value('vehicle_name'))}${cell('운전자 해당여부',value('role'))}${cell('방문목적',`<span class="purpose-preview" title="${esc(row.purpose||'—')}">${esc(row.purpose||'—')}</span>`)}${cell('출입위치',esc(row.gate||'—'))}${approvalStages.map(([key,label])=>approvalCell(row,key,label)).join('')}${cell('식사신청(중식) 여부',esc(row.lunch||'미선택(기존 신청)'))}${cell('안전화',value('shoes'))}</tr>`;
  }).join(''):`<tr><td class="empty" colspan="15">해당 조건의 신청이 없습니다.</td></tr>`;
  attachEditor();renderRecord();if(editing&&focused)focused.focus({preventScroll:true});updateSelection();}
 async function refresh(force=false){const sequence=++refreshId;try{const session=await api('session');if(sequence!==refreshId)return;const wasAdmin=admin;admin=session.reviewer;if(wasAdmin&&!admin){clearReviewer();closeRecord();notificationUI.close();selected.clear();if(editing)closeEditor();clearMail();}if(admin&&!wasAdmin){try{const name=sessionStorage.getItem('permit-reviewer-session')||'';if(name.length<=50)rememberReviewer(name);}catch(e){}}if(!admin)clearReviewer();const data=await api('requests',undefined,{force,reuse:true});if(sequence!==refreshId)return;rows=data;render();$('updated').textContent='목록 확인 '+new Date().toLocaleTimeString('ko-KR');$('loadError').textContent='';}catch(e){if(sequence!==refreshId)return;rows=[];render();$('loadError').textContent='목록을 불러오지 못했습니다. '+e.message;}}

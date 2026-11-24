@@ -209,7 +209,8 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
 
 .notification-details-list{display:grid;gap:12px}.notification-detail{padding:14px;border:1px solid #c5d8cc;border-radius:8px;background:#f4f8f6}.notification-detail strong,.notification-status{display:block}.notification-status{margin-top:8px;font-weight:600;color:#35634f}.notification-detail p{margin:8px 0;overflow-wrap:anywhere}.notification-detail small{color:#6a7f72}.record-info .notification-button{width:100%;max-width:100%;white-space:normal;margin-top:8px;padding:7px 9px;font-size:12px}
 
-/* Phone layout: compact roster cards with progressive details and one approval row. */
+/* Phone roster: applicant summary above the three approval stages. */
+.roster-date-compact{display:none}
 @media(max-width:720px){
  html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
  :root{font-size:14px}
@@ -237,42 +238,52 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
  .mobile-sort>span{font-size:11px}.mobile-sort button{font-size:12px;min-height:42px;padding:8px 10px;white-space:nowrap}
  .table-wrap .roster-table{display:block;width:100%;border:0}
  .table-wrap .roster-table tbody{display:block;width:100%}
- .table-wrap .roster-table tr[data-record]{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px 12px;padding:12px;margin-bottom:12px;border:1px solid #d8e4dc;border-radius:12px;background:white;align-items:start;box-shadow:0 2px 6px #1b493106}
+ .table-wrap .roster-table tr[data-record]{
+  display:grid;
+  grid-template-columns:24px minmax(48px,1fr) minmax(50px,1fr) minmax(86px,1.5fr) 30px;
+  gap:4px;
+  padding:6px;
+  margin-bottom:8px;
+  border:1px solid #d8e4dc;
+  border-radius:8px;
+  background:white;
+  align-items:center;
+ }
  .table-wrap .roster-table tr[data-record].selected{background:#f0f8f3;border-color:#88bda1}
- .table-wrap .roster-table tr[data-record]>td{grid-column:span 3;padding:0;min-width:0;text-align:left;font-size:13px;line-height:1.5;align-self:start;order:3}
- .table-wrap .roster-table tr[data-record]>td::before{text-align:left;color:#71867b;font-size:11px;margin-bottom:3px;font-weight:400}
- .table-wrap .roster-table tr[data-record]>.number-cell{grid-column:1/3;order:0;color:#647c6e;font-size:12px}
- .table-wrap .roster-table .number-cell::before{display:none}
- .table-wrap .roster-table .number-choice{min-height:28px;gap:8px}
- .table-wrap .roster-table .number-choice>span::before{content:'#';color:#91a397;margin-right:2px}
- .table-wrap .roster-table .number-choice input{width:22px;height:22px;margin:0}
- .table-wrap .roster-table tr[data-record]>td[data-label="출입날짜"]{grid-column:3/-1;order:1;text-align:right;font-size:12px;color:#456555;padding-top:4px}
- .table-wrap .roster-table td[data-label="출입날짜"]::before{display:none}
- .table-wrap .roster-table tr[data-record]>td[data-label="이름"]{grid-column:1/-1;order:2;padding-bottom:10px;border-bottom:1px solid #e8eeea}
- .table-wrap .roster-table td[data-label="이름"]::before{display:none}
- .visitor-name{font-size:18px;font-weight:700;letter-spacing:-.3px}
- .table-wrap .roster-table .record-info{display:inline-block;margin:0 0 0 12px;vertical-align:middle;font-weight:400}
- .table-wrap .roster-table .record-info summary{font-size:12px;text-align:left;min-height:32px;line-height:32px;list-style-position:inside}
- .table-wrap .roster-table .record-info[open]{display:block;margin:8px 0 0;padding:8px 10px;background:#f5f8f6;border-radius:8px}
- .table-wrap .roster-table .record-info>div{text-align:left;font-size:12px;line-height:1.7}
- .table-wrap .roster-table .record-info .row-actions{max-width:none;margin:10px 0 0}
- .table-wrap .roster-table .record-info .row-actions button{font-size:13px;min-height:44px}
- .table-wrap .roster-table .record-info .action-help{font-size:11px}
- /* These fields remain available when the existing detail disclosure is opened. */
- .table-wrap .roster-table tr[data-record]:has(.record-info:not([open]))>td:is([data-label="생년월일"],[data-label="운전자 해당여부"],[data-label="방문목적"]){display:none}
- .table-wrap .roster-table tr[data-record]>td[data-label="차량번호"]{grid-column:1/4;order:4}
- .table-wrap .roster-table tr[data-record]>td[data-label="차명"]{grid-column:4/-1;order:4}
- .table-wrap .roster-table tr[data-record]>td[data-label="식사신청(중식) 여부"]{grid-column:1/4;order:5}
- .table-wrap .roster-table tr[data-record]>td[data-label="안전화"]{grid-column:4/-1;order:5}
- .table-wrap .roster-table td[data-label="식사신청(중식) 여부"]::before{content:'중식 신청'}
- .table-wrap .roster-table tr[data-record]>td.approval-cell{grid-column:span 2;order:6;align-self:stretch;padding:8px 5px;border:1px solid #e0ebe4;border-radius:8px;background:#f3f7f4;text-align:center}
- .table-wrap .roster-table td.approval-cell::before{text-align:center;font-size:10px;margin-bottom:2px;white-space:nowrap}
- .table-wrap .roster-table .approval-record{min-height:40px;justify-content:center;gap:5px;flex-wrap:wrap;margin:0;cursor:pointer}
- .table-wrap .roster-table .approval-record input{width:18px;height:18px}
- .table-wrap .roster-table .approval-record>span{max-width:100%;gap:2px}
- .table-wrap .roster-table .approval-record small{font-size:11px}
- .table-wrap .roster-table .approval-record strong{font-size:11px}
- .table-wrap .roster-table .approval-record time{font-size:10px;line-height:1.4}
+ .table-wrap .roster-table tr[data-record]>td{grid-row:1;padding:0;min-width:0;text-align:center;font-size:12px;line-height:1.4}
+ .table-wrap .roster-table tr[data-record]>td::before{color:#536b5e;font-size:11px;margin-bottom:2px;font-weight:400}
+ .table-wrap .roster-table tr[data-record]>.number-cell{grid-column:1;font-variant-numeric:tabular-nums}
+ .table-wrap .roster-table td:is(.number-cell,[data-label="출입날짜"],[data-label="이름"])::before{display:none}
+ .table-wrap .roster-table .number-choice{flex-direction:column;gap:3px;min-height:0}
+ .table-wrap .roster-table .number-choice input{width:18px;height:18px}
+ .table-wrap .roster-table td[data-label="출입날짜"]{grid-column:2;color:#456555;font-variant-numeric:tabular-nums}
+ .table-wrap .roster-table .roster-date-full{display:none}
+ .table-wrap .roster-table .roster-date-compact,.roster-date-compact>span{display:block}
+ .table-wrap .roster-table td[data-label="이름"]{grid-column:3}
+ .table-wrap .roster-table td[data-label="휴대전화번호"]{grid-column:4;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+ .table-wrap .roster-table td[data-label="휴대전화번호"]::before{content:'전화'}
+ .table-wrap .roster-table td[data-label="출입위치"]{grid-column:5}
+ .table-wrap .roster-table td[data-label="출입위치"]::before{content:'출입'}
+ .table-wrap .roster-table tr[data-record]>td:not(.approval-cell,.number-cell,[data-label="출입날짜"],[data-label="이름"],[data-label="휴대전화번호"],[data-label="출입위치"]){display:none}
+ .table-wrap .roster-table tr[data-record]>td.approval-cell{
+  grid-row:2;
+  grid-column:1/-1;
+  width:33.333%;
+  padding:3px 2px;
+  align-self:stretch;
+  background:#f0f6f2;
+ }
+ .table-wrap .roster-table tr[data-record]>td[data-label="가이수 신청"]{justify-self:start;border-radius:6px 0 0 6px}
+ .table-wrap .roster-table tr[data-record]>td[data-label="가이수 승인"]{justify-self:center;border-inline:1px solid #d8e4dc}
+ .table-wrap .roster-table tr[data-record]>td[data-label="최종 승인"]{justify-self:end;border-radius:0 6px 6px 0}
+ .table-wrap .roster-table td.approval-cell::before{margin-bottom:0}
+ .table-wrap .roster-table .approval-record{min-height:24px;gap:4px;margin:0}
+ .table-wrap .roster-table .approval-record:has(input:enabled){min-height:40px;cursor:pointer}
+ .table-wrap .roster-table .approval-record input{width:14px;height:14px}
+ .table-wrap .roster-table .approval-record input:disabled:not(:checked){display:none}
+ .table-wrap .roster-table .approval-record>span{min-width:0;max-width:100%;gap:1px}
+ .table-wrap .roster-table .approval-record strong,.table-wrap .roster-table .approval-record small{font-size:11px}
+ .table-wrap .roster-table .approval-record time{font-size:10px;line-height:1.3}
  .table-wrap .roster-table .empty{grid-column:1/-1}
  .table-wrap .roster-table tr.inline-editor-row>td{padding-bottom:12px}
  .inline-editor{padding:12px;border-radius:10px}.inline-editor .person{padding:10px}
@@ -297,7 +308,7 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
  main{padding-left:8px;padding-right:8px}.panel{padding:10px}
  .heading h1{font-size:21px}.heading .gate-map{font-size:11px;gap:4px}
  .heading .gate-map .external-arrow{display:none}
- .table-wrap .roster-table tr[data-record]{padding:10px;gap:10px 8px}
+
 }
 
 /* Gate cards contain map navigation and a separate copy action. */
@@ -323,6 +334,11 @@ input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
 /* Keep list rows compact; long content and actions live in the record dialog. */
 .table-wrap .roster-table .record-link{display:block;width:100%;margin:0;padding:4px 2px;min-height:44px;background:transparent;color:#285a82;text-align:center;white-space:normal}
 .record-link .visitor-name{display:block;font-size:13px;font-weight:600}.record-action-label{display:block;font-size:11px;margin-top:3px;color:#3c718f}
+@media(max-width:720px){
+ .table-wrap .roster-table .record-link{padding:2px 0;line-height:1.35}
+ .record-link .visitor-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .record-link .record-action-label{font-size:10px;white-space:nowrap}
+}
 .purpose-preview{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;line-height:1.65;max-height:3.3em;overflow-wrap:anywhere}
 #recordDialog{width:min(960px,calc(100vw - 24px));max-height:90dvh;padding:24px}
 .record-reviewer{display:flex;align-items:center;gap:18px;padding:14px 16px;background:#edf5f1;border:1px solid #c5d8cc;border-radius:9px;margin-bottom:14px}
