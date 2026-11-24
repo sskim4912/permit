@@ -5,13 +5,16 @@
 <section id="siteMapPanel" class="panel site-map-panel" aria-label="현장 위치도" hidden><h2>현장 위치도</h2><button type="button" id="siteMapClose" class="site-map-close" aria-label="현장 위치도 닫기"><img id="siteMapImage" data-src="/site-location-map.png" alt="대산 현장 위치도: LG화학 서문·정문, 현장 가설사무실 및 주요 시설 안내"></button><p class="site-map-hint">지도를 누르면 닫힙니다.</p><p id="siteMapError" class="error" role="alert" hidden>현장 위치도를 불러오지 못했습니다. 잠시 후 다시 열어 주세요.</p></section>
 <div id="formHome"><section id="requestPanel" class="panel"><form id="requestForm" novalidate><div class="section-title"><h2 id="formTitle">방문자 입력</h2></div><p class="muted">* 필수 항목</p><div id="people"></div><div class="entry-tools"><button type="button" id="add" class="outline">＋ 인원 추가</button><p id="draftStatus" role="status" aria-live="polite"></p></div><div id="notificationResult" role="status" aria-live="polite" hidden></div><button type="button" id="retryNotifications" class="outline" hidden>문자 발송 결과 확인</button><div id="notificationManual" class="notification-manual" hidden><a class="outline" href="https://github.com/sskim4912/permit/actions/workflows/notify-queue.yml" target="_blank" rel="noopener noreferrer">대기 문자 처리 작업 열기 ↗</a><small>GitHub 실행 권한이 있는 관리자는 열린 화면에서 Run workflow를 실행해 대기 중인 문자를 처리할 수 있습니다.</small></div><p id="formError" class="error" role="alert"></p><section id="privacyNotice" class="privacy-notice" aria-labelledby="privacyTitle">
 <h3 id="privacyTitle">신청 확인</h3>
+<div class="privacy-entry">
 <fieldset class="privacy-modes"><legend>입력 방식</legend><div>
 <label><input id="privacySelfMode" name="privacyInputMode" type="radio" value="self" checked> 본인 신청</label>
 <label><input id="privacyStaffMode" name="privacyInputMode" type="radio" value="proxy" aria-describedby="privacyInputHelp"> 대리 신청</label>
 </div></fieldset>
+<div id="authorLine" hidden><label for="authorName">대리 신청자 이름 *</label><input id="authorName" aria-describedby="privacyInputHelp" maxlength="50" placeholder="실제 제출자 이름"></div>
+</div>
 <p id="privacyMultipleHelp" hidden>여러 명을 등록할 때는 대리 신청을 선택하고 실제 제출자 이름을 입력해 주세요.</p>
 <p id="privacyApplicant">신청자 <strong id="privacyApplicantName">방문자 이름을 입력해 주세요</strong></p>
-<div id="authorLine" hidden><label for="authorName">대리 신청자 이름 *</label><input id="authorName" maxlength="50" placeholder="실제 제출자 이름"></div>
+
 <p id="privacyInputHelp" hidden>방문자에게 직접 연락해 정보를 확인하고, 아래 두 동의 내용을 안내한 뒤 각각의 동의를 확인해 주세요.</p>
 <div class="privacy-consent-row">
 <label><input id="privacyCollection" type="checkbox"><span id="privacyCollectionLabel">개인정보 수집·이용에 동의합니다</span></label>
